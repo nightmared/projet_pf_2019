@@ -1,38 +1,36 @@
 open Decl
 
 type ('shift, 'reset) res =
-  | New of ((bool -> ('shift, 'reset) res) * bool * bool)
-  | Yield of (('shift -> ('shift, 'reset) res) * 'shift)
-  | Exit;;
+	| Get of (('shift -> ('shift, 'reset) res))
+	| Yield of ((unit -> ('shift, 'reset) res) * 'shift)
+	| Exit;;
 
 module GreenThreads (M: sig type shift end) =
-  struct
-    type shift = M.shift
+struct
+	let p: (M.shift, 'reset) res Delimcc.prompt = Delimcc.new_prompt ()
 
-    let p: (shift, 'reset) res Delimcc.prompt = Delimcc.new_prompt ()
+	let rec scheduler tasks val_init = match tasks with
+		| [] -> ()
+		| proc::q -> (match Delimcc.push_prompt p proc with
+			| Get old_proc -> scheduler ((fun () -> old_proc val_init)::q) val_init
+			| Yield (old_proc, v) -> scheduler (q@[old_proc]) v
+			| Exit -> scheduler q val_init);;
 
-    let scheduler proc_init val_init =
-      let rec loop queue = match queue with
-        | [] -> ()
-        | proc::q -> (match Delimcc.push_prompt p proc with
-          | New (proc, v, other_v) -> loop ((fun () -> proc v)::q@[fun () -> proc other_v])
-          | Yield (old_proc, v) -> loop (q@[fun () -> old_proc v])
-          | Exit -> loop q)
-        in loop [fun () -> proc_init val_init];;
-
-    let yield v = Delimcc.shift p (fun k -> Yield (k, v));;
-    let fork () = Delimcc.shift p (fun k -> New (k, true, false));;
-    let exit () = Delimcc.shift p (fun k -> Exit);;
-  end
+	let get () = Delimcc.shift p (fun k -> Get (k));;
+	let yield v = Delimcc.shift p (fun k -> Yield (k, v));;
+	let exit () = Delimcc.shift p (fun k -> Exit);;
+end
 
 
 module GreenThreadsBool = GreenThreads (struct type shift = terrain end);;
 
 let sendmsg msg = begin
-    for i = 1 to 10 do
-      print_endline msg;
-      GreenThreadsBool.yield ();
-    done;
-  end;;
+	for i = 1 to 10 do
+		print_endline msg;
+		let t = GreenThreadsBool.get () in
+		let _ = List.iter (fun (Brique ((x, y), _, _)) -> print_endline ((string_of_int x)^" "^(string_of_int y))) t in 
+		GreenThreadsBool.yield (Ui.gen_brique 1 4 640 480::t);
+	done;
+	end;;
 
-GreenThreadsBool.scheduler (fun _ -> if GreenThreadsBool.fork () then sendmsg "ping" else sendmsg "pong!"; GreenThreadsBool.exit ()) true;
+GreenThreadsBool.scheduler [(fun t -> sendmsg "ping"; GreenThreadsBool.exit ()); (fun t -> sendmsg "pong"; GreenThreadsBool.exit ())] [];
