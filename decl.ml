@@ -1,8 +1,8 @@
 type lifetime = int option
 type properties = NilProp
 
-type position = float * float;;
-type vitesse = float;;
+type position = int * int;;
+type direction = float * float;;
 
 
 (* La brique a une durée de vie, et elle sera supprimée (à la charge de l'appelant)
@@ -17,4 +17,4 @@ l'avantage de permettre des insertions/suppressions en O(1),
 or ces opérations ont lieu fréquemment dans notre jeu *)
 type terrain = brique list;;
 
-type balle = position * vitesse;;
+type balle = position * direction;;
