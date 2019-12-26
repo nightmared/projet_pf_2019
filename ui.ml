@@ -24,6 +24,7 @@ let intersect_ray p q r s =
     else false;;
 
 let intersect_rectangle (x, y) dir rect =
+    (* on vérifie les intersections avec les quatres côtés du rectangle *)
     (intersect_ray (x, y) rect dir (direction_to_float (0, brique_height))
     || intersect_ray (x, y) rect dir (direction_to_float (brique_width, 0))
     || intersect_ray (x+.(float_of_int brique_width), y) rect dir (direction_to_float (0, brique_height))
@@ -31,27 +32,35 @@ let intersect_rectangle (x, y) dir rect =
 
 let intersect pos dir terrain = 
     List.fold_left
-        (fun acc (Brique(rect, _, _)) -> acc || intersect_rectangle pos dir (direction_to_float rect))
-        false
+        (fun acc v -> let (Brique(rect, _, _)) = v in if intersect_rectangle pos dir (direction_to_float rect)
+            then v::acc else acc
+        )
+        []
         terrain;;
 
-(* TODO: ajouter de l'aléatoire là-dedans *)
+let gen_brique x_idx y_idx _ height =
+    Brique (
+        (((x_idx + 1) * brique_border + (x_idx) * brique_width),
+        height-((y_idx + 1) * brique_border + (y_idx-1) * brique_height)),
+        Some 1,
+        NilProp
+    )
+
+(* TODO: ajouter de l'aléatoire là-dedans - c'est la raison d'être de l'utilisation
+ * du type Option ici *)
 let gen_terrain width height =
     (* solution entière de l'équation width =
-    (nb_briques_par_ligne+1)*brique_border+nb_briques_par_ligne*brique_width *)
+     * (nb_briques_par_ligne+1)*brique_border+nb_briques_par_ligne*brique_width *)
     let nb_briques_par_ligne = (width-brique_border)/(brique_border+brique_width)
     (* on réserve quelques lignes en bas pour que le jeu soit jouable *)
     in let nb_briques_par_colonne = (height-brique_border)/(brique_border+brique_height) - 6
-    in List.flatten
-        (List.init nb_briques_par_ligne
-            (fun x_idx -> List.init nb_briques_par_colonne
-                (fun y_idx ->
-                    Brique (
-                        (((x_idx + 1) * brique_border + (x_idx) * brique_width),
-                        height-((y_idx + 1) * brique_border + (y_idx-1) * brique_height)),
-                        Some 1,
-                        NilProp
-                    )
+    (* on conserve uniquement les éléments non nuls *)
+    in List.filter_map
+        (fun x -> x)
+        (List.flatten
+            (List.init nb_briques_par_ligne
+                (fun x_idx -> List.init nb_briques_par_colonne
+                    (fun y_idx -> Some(gen_brique x_idx y_idx width height))
                 )
             )
         )
@@ -61,7 +70,21 @@ let draw_terrain =
         draw_rect x y brique_width brique_height
     )
 
+let handle_key terrain ball key = ();;
+
 let run () =
     let win = open_graph " 640x480"
     in let terrain = gen_terrain (size_x win) (size_y win)
-    in draw_terrain terrain
+    in let ball = ((0, (size_x win)/2), (0.15, 0.15))
+    in try
+        begin
+            (* pour empécher les artifacts graphiques avec le double buffering *)
+            auto_synchronize false;
+            while true do
+                let st = wait_next_event [ Key_pressed; Poll ] in
+                synchronize ();
+                if st.keypressed then handle_key terrain ball st.key;
+                draw_terrain terrain
+            done;
+        end
+    with Exit -> ()
