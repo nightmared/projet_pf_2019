@@ -2,7 +2,8 @@ open Decl
 
 type ('shift, 'reset) res =
 	| Get of (('shift -> ('shift, 'reset) res))
-	| Yield of ((unit -> ('shift, 'reset) res) * 'shift)
+	| Send of ((unit -> ('shift, 'reset) res) * 'shift)
+	| Yield of ((unit -> ('shift, 'reset) res))
 	| Exit;;
 
 module GreenThreads (M: sig type shift end) =
@@ -13,11 +14,13 @@ struct
 		| [] -> ()
 		| proc::q -> (match Delimcc.push_prompt p proc with
 			| Get old_proc -> scheduler ((fun () -> old_proc val_init)::q) val_init
-			| Yield (old_proc, v) -> scheduler (q@[old_proc]) v
+			| Send (old_proc, v) -> scheduler (old_proc::q) v
+			| Yield old_proc -> scheduler (q@[old_proc]) val_init
 			| Exit -> scheduler q val_init);;
 
 	let get () = Delimcc.shift p (fun k -> Get (k));;
-	let yield v = Delimcc.shift p (fun k -> Yield (k, v));;
+	let send v = Delimcc.shift p (fun k -> Send (k, v));;
+	let yield () = Delimcc.shift p (fun k -> Yield (k));;
 	let exit () = Delimcc.shift p (fun k -> Exit);;
 end
 
@@ -29,8 +32,9 @@ let sendmsg msg = begin
 		print_endline msg;
 		let t = GreenThreadsBool.get () in
 		let _ = List.iter (fun (Brique ((x, y), _, _)) -> print_endline ((string_of_int x)^" "^(string_of_int y))) t in 
-		GreenThreadsBool.yield (Ui.gen_brique 1 4 640 480::t);
+		GreenThreadsBool.send (Ui.gen_brique 1 4 640 480::t);
+		GreenThreadsBool.yield ();
 	done;
 	end;;
 
-GreenThreadsBool.scheduler [(fun t -> sendmsg "ping"; GreenThreadsBool.exit ()); (fun t -> sendmsg "pong"; GreenThreadsBool.exit ())] [];
+GreenThreadsBool.scheduler [(fun () -> sendmsg "ping"; GreenThreadsBool.exit ()); (fun () -> sendmsg "pong"; GreenThreadsBool.exit ())] [];
