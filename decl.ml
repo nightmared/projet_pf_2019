@@ -15,6 +15,10 @@ type brique = Brique: position * lifetime * properties -> brique;;
 * bien que non idéale au niveau des performances, a
 * l'avantage de permettre des insertions/suppressions en O(1),
 * or ces opérations ont lieu fréquemment dans notre jeu *)
-type terrain = brique list;;
+type terrain = Terrain: brique list -> terrain;;
 
-type balle = position * direction;;
+type balle = Balle: position * direction -> balle;;
+
+type raquette = Raquette: position -> raquette;;
+
+type state = State: terrain * balle * raquette -> state;;
