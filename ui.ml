@@ -1,6 +1,5 @@
 open Graphics
 open Decl
-open Delimcc
 
 let brique_width = 25;;
 let brique_height = 15;;
@@ -77,8 +76,8 @@ let run () =
 	let win = open_graph " 640x480"
 	in let terrain = gen_terrain (size_x win) (size_y win)
 	in let ball = ((0, (size_x win)/2), (0.15, 0.15))
-	in let prompt = new_prompt ()
-	in try
+	in ()
+	(*try
 		begin
 			(* pour empécher les artifacts graphiques avec le double buffering *)
 			auto_synchronize false;
@@ -89,4 +88,4 @@ let run () =
 				draw_terrain terrain
 			done;
 		end
-	with Exit -> ()
+	with Exit -> ()*)
