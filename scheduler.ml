@@ -1,14 +1,13 @@
 open Decl
 
-type ('shift) res =
-	| Get of (('shift -> ('shift) res))
-	| Send of ((unit -> ('shift) res) * 'shift)
-	| Yield of ((unit -> ('shift) res))
+type 'shift res =
+	| Get of (('shift -> 'shift res))
+	| Send of ((unit -> 'shift res) * 'shift)
+	| Yield of ((unit -> 'shift res))
 	| Exit
 
 module GreenThreads (M: sig type shift end) = struct
-	type shift = M.shift
-	let p: (M.shift) res Delimcc.prompt = Delimcc.new_prompt ()
+	let p: M.shift res Delimcc.prompt = Delimcc.new_prompt ()
 
 	let rec scheduler tasks val_init = match tasks with
 		| [] -> ()
@@ -24,9 +23,8 @@ module GreenThreads (M: sig type shift end) = struct
 	let get () = Delimcc.shift p (fun k -> Get (k))
 	let send v = Delimcc.shift p (fun k -> Send (k, v))
 	let yield () = Delimcc.shift p (fun k -> Yield (k))
-	let exit () = Delimcc.shift p (fun k -> Exit)
+	let exit () = Delimcc.shift p (fun _ -> Exit)
 end
-
 
 (*
 * module GreenThreadsBool = GreenThreads (struct type shift = terrain end)

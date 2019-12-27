@@ -1,5 +1,7 @@
 open Graphics
+
 open Decl
+open Scheduler
 
 let brique_width = 25;;
 let brique_height = 15;;
@@ -65,27 +67,39 @@ let gen_terrain width height =
 			)
 		)
 
-let draw_terrain =
+let draw_terrain (Terrain l) =
 	List.iter (fun (Brique ((x, y), _, _)) ->
 		draw_rect x y brique_width brique_height
-	)
+	) l
 
-let handle_key terrain ball key = ();;
+let handle_key state key = state;;
 
-let run () =
-	let win = open_graph " 640x480"
-	in let terrain = gen_terrain (size_x win) (size_y win)
-	in let ball = ((0, (size_x win)/2), (0.15, 0.15))
-	in ()
-	(*try
+module GreenThreadsState = GreenThreads (struct type shift = state end)
+
+let main_loop () =
+	try
 		begin
 			(* pour empécher les artifacts graphiques avec le double buffering *)
 			auto_synchronize false;
 			while true do
 				let st = wait_next_event [ Key_pressed; Poll ] in
 				synchronize ();
-				if st.keypressed then handle_key terrain ball st.key;
-				draw_terrain terrain
+				if st.keypressed then
+					let state = GreenThreadsState.get ()
+					in let new_state = handle_key state st.key
+					in GreenThreadsState.send new_state;
+				let State (terrain, _, _) = GreenThreadsState.get ()
+				in draw_terrain terrain;
+				GreenThreadsState.yield ();
 			done;
+			GreenThreadsState.exit ()
 		end
-	with Exit -> ()*)
+	with Exit -> GreenThreadsState.exit ()
+
+let run () =
+	let win = open_graph " 640x480"
+	in let terrain = gen_terrain (size_x win) (size_y win)
+	in let balle = Balle ((0, (size_x win)/2), (0.15, 0.15))
+	in let raquette = Raquette (0, (size_x win)/2)
+	in let etat_initial = (State (Terrain terrain, balle, raquette))
+	in GreenThreadsState.scheduler [main_loop] etat_initial
