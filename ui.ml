@@ -88,13 +88,22 @@ let main_loop () =
 					let state = GreenThreadsState.get ()
 					in let new_state = handle_key state st.key
 					in GreenThreadsState.send new_state;
-				let State (terrain, _, _) = GreenThreadsState.get ()
-				in draw_terrain terrain;
 				GreenThreadsState.yield ();
 			done;
 			GreenThreadsState.exit ()
 		end
 	with Exit -> GreenThreadsState.exit ()
+
+let draw_everything () =
+	begin
+		while true do
+			GreenThreadsState.yield ();
+			let State (terrain, _, _) = GreenThreadsState.get ()
+			in draw_terrain terrain;
+
+		done;
+		GreenThreadsState.exit ()
+	end
 
 let run () =
 	let win = open_graph " 640x480"
@@ -102,4 +111,4 @@ let run () =
 	in let balle = Balle ((0, (size_x win)/2), (0.15, 0.15))
 	in let raquette = Raquette (0, (size_x win)/2)
 	in let etat_initial = (State (Terrain terrain, balle, raquette))
-	in GreenThreadsState.scheduler [main_loop] etat_initial
+	in GreenThreadsState.scheduler [main_loop; draw_everything] etat_initial
