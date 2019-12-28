@@ -67,24 +67,29 @@ let gen_terrain width height =
 			)
 		)
 
-let draw_terrain (Terrain l) =
+let dessiner_terrain (Terrain liste_blocs) =
 	List.iter (fun (Brique ((x, y), _, _)) ->
 		draw_rect x y brique_width brique_height
-	) l
+	) liste_blocs
 
-let handle_key state key = state;;
+let dessiner_balle (Balle (pos, dir)) = ()
 
+let dessiner_raquette (Raquette pos) = ()
+
+let handle_key state key = state
+
+(* Module d'ordonnancement coopératif des différentes tâches *)
 module GreenThreadsState = GreenThreads (struct type shift = state end)
 
+(* Boucle évènementielle pour dessiner la raquette *)
 let main_loop () =
 	try
 		begin
 			(* pour empécher les artifacts graphiques avec le double buffering *)
 			auto_synchronize false;
 			while true do
-				let st = wait_next_event [ Key_pressed; Poll ] in
-				synchronize ();
-				if st.keypressed then
+				let st = wait_next_event [ Key_pressed; Poll ]
+				in if st.keypressed then
 					let state = GreenThreadsState.get ()
 					in let new_state = handle_key state st.key
 					in GreenThreadsState.send new_state;
@@ -94,21 +99,40 @@ let main_loop () =
 		end
 	with Exit -> GreenThreadsState.exit ()
 
-let draw_everything () =
+(* Détecte les collisions et supprime les blocs détruits *)
+let detecter_collisions () =
 	begin
 		while true do
+			let State (terrain, balle, raquette) = GreenThreadsState.get ()
+			in begin
+				()
+			end;
 			GreenThreadsState.yield ();
-			let State (terrain, _, _) = GreenThreadsState.get ()
-			in draw_terrain terrain;
-
 		done;
 		GreenThreadsState.exit ()
 	end
 
+(* Dessine les différents objets à l'écran *)
+let dessiner () =
+	begin
+		while true do
+			let State (terrain, balle, raquette) = GreenThreadsState.get ()
+			in begin
+				dessiner_terrain terrain;
+				dessiner_balle balle;
+				dessiner_raquette raquette;
+				synchronize ();
+			end;
+			GreenThreadsState.yield ();
+		done;
+		GreenThreadsState.exit ()
+	end
+
+(* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
 	let win = open_graph " 640x480"
 	in let terrain = gen_terrain (size_x win) (size_y win)
 	in let balle = Balle ((0, (size_x win)/2), (0.15, 0.15))
 	in let raquette = Raquette (0, (size_x win)/2)
 	in let etat_initial = (State (Terrain terrain, balle, raquette))
-	in GreenThreadsState.scheduler [main_loop; draw_everything] etat_initial
+	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial
