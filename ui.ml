@@ -103,7 +103,7 @@ let main_loop () =
 let detecter_collisions () =
 	begin
 		while true do
-			let State (terrain, balle, raquette) = GreenThreadsState.get ()
+			let State (LocalState (terrain, balle, raquette), _) = GreenThreadsState.get ()
 			in begin
 				()
 			end;
@@ -116,7 +116,7 @@ let detecter_collisions () =
 let dessiner () =
 	begin
 		while true do
-			let State (terrain, balle, raquette) = GreenThreadsState.get ()
+			let State (LocalState (terrain, balle, raquette), _) = GreenThreadsState.get ()
 			in begin
 				dessiner_terrain terrain;
 				dessiner_balle balle;
@@ -134,5 +134,5 @@ let run () =
 	in let terrain = gen_terrain (size_x win) (size_y win)
 	in let balle = Balle ((0, (size_x win)/2), (0.15, 0.15))
 	in let raquette = Raquette (0, (size_x win)/2)
-	in let etat_initial = (State (Terrain terrain, balle, raquette))
+	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState ()))
 	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial
