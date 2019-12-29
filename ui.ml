@@ -3,9 +3,14 @@ open Graphics
 open Decl
 open Scheduler
 
-let brique_width = 25;;
-let brique_height = 15;;
-let brique_border = 10;;
+let brique_width = 25
+let brique_height = 15
+let brique_border = 10
+
+let raquette_width = 20
+let raquette_height = 15
+
+let balle_radius = 6
 
 
 (* outils utilitaires pour le calcul de collisions *)
@@ -72,14 +77,20 @@ let dessiner_terrain (Terrain liste_blocs) =
 		draw_rect x y brique_width brique_height
 	) liste_blocs
 
-let dessiner_balle (Balle (pos, dir)) = ()
+let dessiner_balle (Balle ((x, y), dir)) = draw_circle x y balle_radius
 
-let dessiner_raquette (Raquette pos) = ()
-
-let handle_key state key = state
+let dessiner_raquette (Raquette (x, y)) = draw_rect x y raquette_width raquette_height
 
 (* Module d'ordonnancement coopératif des différentes tâches *)
 module GreenThreadsState = GreenThreads (struct type shift = state end)
+
+(* modifie l'état en fonction de l'entrée clavier *)
+let handle_key (State (LocalState (terrain, balle, raquette), GlobalState g_state)) key =
+	begin
+		print_char key;
+		print_newline ();
+		(State (LocalState (terrain, balle, raquette), GlobalState g_state))
+	end
 
 (* Boucle évènementielle pour dessiner la raquette *)
 let main_loop () =
@@ -90,7 +101,10 @@ let main_loop () =
 			while true do
 				let st = wait_next_event [ Key_pressed; Poll ]
 				in if st.keypressed then
-					let state = GreenThreadsState.get ()
+					(* nécessaire pour que l'évènement ne soit pas retourné à chaque poll(),
+					 * il faut vider le pool d'évènements *)
+					let st = wait_next_event [ Key_pressed ]
+					in let state = GreenThreadsState.get ()
 					in let new_state = handle_key state st.key
 					in GreenThreadsState.send new_state;
 				GreenThreadsState.yield ();
@@ -118,6 +132,7 @@ let dessiner () =
 		while true do
 			let State (LocalState (terrain, balle, raquette), _) = GreenThreadsState.get ()
 			in begin
+				clear_graph ();
 				dessiner_terrain terrain;
 				dessiner_balle balle;
 				dessiner_raquette raquette;
@@ -132,7 +147,7 @@ let dessiner () =
 let run () =
 	let win = open_graph " 640x480"
 	in let terrain = gen_terrain (size_x win) (size_y win)
-	in let balle = Balle ((0, (size_x win)/2), (0.15, 0.15))
-	in let raquette = Raquette (0, (size_x win)/2)
+	in let balle = Balle (((size_x win)/2, raquette_height+balle_radius), (0.15, 0.15))
+	in let raquette = Raquette (((size_x win)-raquette_width)/2, 0)
 	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState ()))
 	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial
