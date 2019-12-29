@@ -82,7 +82,20 @@ let dessiner_balle (Balle ((x, y), dir)) = draw_circle x y balle_radius
 
 let dessiner_raquette (Raquette (x, y)) = draw_rect x y raquette_width raquette_height
 
-let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_y)) = (Balle ((x+dx, y+dy), (dx, dy)))
+let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_y)) =
+	let (x, dx) = (if x+dx > win_size_x-balle_radius then
+		(win_size_x-balle_radius, -dx)
+	else if x+dx < 0 then
+		(balle_radius, -dx)
+	else
+		(x+dx, dx))
+	in let (y, dy) = (if y+dy > win_size_y-balle_radius then
+		(win_size_y-balle_radius, -dy)
+	else if y+dy < 0 then
+		(balle_radius, -dy)
+	else
+		(y+dy, dy))
+	in (Balle ((x, y), (dx, dy)))
 
 (* déplace la raquette si possible *)
 let deplacer_raquette (Raquette (x, y)) win_size gauche =
