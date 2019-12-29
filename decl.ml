@@ -4,7 +4,7 @@ type lifetime = int option
 type properties = NilProp
 
 type position = int * int
-type direction = float * float
+type direction = int * int
 
 
 (* La brique a une durée de vie, et elle sera supprimée (à la charge de l'appelant)
