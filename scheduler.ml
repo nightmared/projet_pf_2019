@@ -1,5 +1,3 @@
-open Decl
-
 type 'shift res =
 	| Get of (('shift -> 'shift res))
 	| Send of ((unit -> 'shift res) * 'shift)

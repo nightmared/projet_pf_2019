@@ -1,7 +1,6 @@
 open Graphics
 
 open Decl
-open Scheduler
 
 let brique_width = 25
 let brique_height = 15
@@ -9,6 +8,8 @@ let brique_border = 10
 
 let raquette_width = 20
 let raquette_height = 15
+(* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
+let raquette_offset = 30
 
 let balle_radius = 6
 
@@ -37,7 +38,7 @@ let intersect_rectangle (x, y) dir rect =
 	|| intersect_ray (x+.(float_of_int brique_width), y) rect dir (direction_to_float (0, brique_height))
 	|| intersect_ray (x, y+.(float_of_int brique_height)) rect dir (direction_to_float (brique_width, 0)))
 
-let intersect pos dir terrain = 
+let intersect pos dir (Terrain terrain) =
 	List.fold_left
 		(fun acc v -> let (Brique(rect, _, _)) = v in if intersect_rectangle pos dir (direction_to_float rect)
 			then v::acc else acc
@@ -81,15 +82,26 @@ let dessiner_balle (Balle ((x, y), dir)) = draw_circle x y balle_radius
 
 let dessiner_raquette (Raquette (x, y)) = draw_rect x y raquette_width raquette_height
 
-(* Module d'ordonnancement coopératif des différentes tâches *)
-module GreenThreadsState = GreenThreads (struct type shift = state end)
+(* déplace la raquette si possible *)
+let deplacer_raquette (Raquette (x, y)) win_size gauche =
+	if gauche then
+		(if x-raquette_offset < 0 then (Raquette (0, y)) else (Raquette (x-raquette_offset, y)))
+	else
+		(if x+raquette_offset >= win_size then (Raquette (win_size-raquette_width, y)) else (Raquette (x+raquette_offset, y)))
 
 (* modifie l'état en fonction de l'entrée clavier *)
-let handle_key (State (LocalState (terrain, balle, raquette), GlobalState g_state)) key =
+let gerer_entree_clavier (State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y))) key =
 	begin
-		print_char key;
-		print_newline ();
-		(State (LocalState (terrain, balle, raquette), GlobalState g_state))
+		let raquette =
+			(if key = 'd' then
+				deplacer_raquette raquette win_size_x false
+			else
+				if key = 'q' then
+					deplacer_raquette raquette win_size_x true
+				else
+					raquette)
+		in
+			(State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y)))
 	end
 
 (* Boucle évènementielle pour dessiner la raquette *)
@@ -105,7 +117,7 @@ let main_loop () =
 					 * il faut vider le pool d'évènements *)
 					let st = wait_next_event [ Key_pressed ]
 					in let state = GreenThreadsState.get ()
-					in let new_state = handle_key state st.key
+					in let new_state = gerer_entree_clavier state st.key
 					in GreenThreadsState.send new_state;
 				GreenThreadsState.yield ();
 			done;
@@ -146,8 +158,10 @@ let dessiner () =
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
 	let win = open_graph " 640x480"
-	in let terrain = gen_terrain (size_x win) (size_y win)
-	in let balle = Balle (((size_x win)/2, raquette_height+balle_radius), (0.15, 0.15))
-	in let raquette = Raquette (((size_x win)-raquette_width)/2, 0)
-	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState ()))
+	in let size_win_x = size_x win
+	in let size_win_y = size_y win
+	in let terrain = gen_terrain size_win_x size_win_y
+	in let balle = Balle ((size_win_x/2, raquette_height+balle_radius), (0.15, 0.15))
+	in let raquette = Raquette ((size_win_x-raquette_width)/2, 0)
+	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
 	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial

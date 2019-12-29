@@ -1,3 +1,5 @@
+open Scheduler
+
 type lifetime = int option
 type properties = NilProp
 
@@ -21,6 +23,13 @@ type balle = Balle: position * direction -> balle
 
 type raquette = Raquette: position -> raquette
 
+type win_size = int * int
+
 type local_state = LocalState: terrain * balle * raquette -> local_state
-type global_state = GlobalState: unit -> global_state
+(* TODO: handle resize ? *)
+type global_state = GlobalState: win_size -> global_state
 type state = State: local_state * global_state -> state
+
+
+(* Module d'ordonnancement coopératif des différentes tâches *)
+module GreenThreadsState = GreenThreads (struct type shift = state end)
