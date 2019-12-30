@@ -16,7 +16,7 @@ let balle_radius = 6
 
 (* outils utilitaires pour le calcul de collisions *)
 let minus_direction (x, y) (x_prime, y_prime) = (x-.x_prime, y-.y_prime);;
-let direction_to_float (x, y) = (float_of_int x, float_of_int y);;
+let tuple_to_float (x, y) = (float_of_int x, float_of_int y);;
 let cross_product (x1, y1) (x2, y2) = x1*.y2 -. y1*.x2;;
 
 (* basé sur la méthode décrite sur https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect/565282 *)
@@ -31,16 +31,16 @@ let intersect_ray p q r s =
 	(* le cas colinéaire signifie qu'il n'y a pas de collisions pour nous *)
 	else false;;
 
-let intersect_rectangle (x, y) dir rect =
+let intersect_rectangle (x, y) dir rect (rect_width, rect_height) =
 	(* on vérifie les intersections avec les quatres côtés du rectangle *)
-	(intersect_ray (x, y) rect dir (direction_to_float (0, brique_height))
-	|| intersect_ray (x, y) rect dir (direction_to_float (brique_width, 0))
-	|| intersect_ray (x+.(float_of_int brique_width), y) rect dir (direction_to_float (0, brique_height))
-	|| intersect_ray (x, y+.(float_of_int brique_height)) rect dir (direction_to_float (brique_width, 0)))
+	(intersect_ray (x, y) rect dir (tuple_to_float (0, rect_height))
+	|| intersect_ray (x, y) rect dir (tuple_to_float (rect_width, 0))
+	|| intersect_ray (x+.(float_of_int rect_width), y) rect dir (tuple_to_float (0, rect_height))
+	|| intersect_ray (x, y+.(float_of_int rect_height)) rect dir (tuple_to_float (rect_width, 0)))
 
-let intersect pos dir (Terrain terrain) =
+let intersect (Balle (pos, dir)) (Terrain terrain) =
 	List.fold_left
-		(fun acc v -> let (Brique(rect, _, _)) = v in if intersect_rectangle pos dir (direction_to_float rect)
+		(fun acc v -> let (Brique(rect, _, _)) = v in if intersect_rectangle pos dir (tuple_to_float rect) (brique_width, brique_height)
 			then v::acc else acc
 		)
 		[]
@@ -72,6 +72,12 @@ let gen_terrain width height =
 				)
 			)
 		)
+
+(* supprime une liste de blocs du terrain *)
+let supprimer_blocs (Terrain terrain) l =
+	Terrain
+		(List.fold_left (fun acc e -> List.filter_map (fun x -> if x = e then None else Some(x)) acc) terrain l)
+
 
 let dessiner_terrain (Terrain liste_blocs) =
 	List.iter (fun (Brique ((x, y), _, _)) ->
@@ -140,7 +146,7 @@ let main_loop () =
 		end
 	with Exit -> GreenThreadsState.exit ()
 
-(* Fais avancer la balle, détecte les collisions et supprime les blocs détruits *)
+(* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
 	while true do
 		let start_time = Unix.gettimeofday () in
@@ -153,7 +159,30 @@ let detecter_collisions () =
 				 * ça ne posera pas de problèmes *)
 				let State (LocalState (terrain, balle, raquette), g_state) = GreenThreadsState.get ()
 				in begin
-					let balle = avancer_balle balle g_state
+					(* normalise le vecteur pour détecter les collisions plus précisément:
+					* le bloc est détruit lorsque le bord du cercle atteint les blocs et
+					* non pas lorsque son centre les atteint *)
+					let Raquette raquette_position = raquette
+					in let Balle ((posx, posy), dir) = balle
+					in let (dirx, diry) = dir
+					in let offset = (float_of_int balle_radius /. (dirx *. dirx +. diry *. diry))
+					in let npos = (posx +. dirx *. offset, posy +. diry *. offset)
+					(* ceci représente la pointe de la balle *)
+					in let balle_virtuelle = Balle (npos, dir)
+
+					(* détection et suppression des blocs sur le chemin de la balle *)
+					in let blocs_intersectants = intersect balle_virtuelle terrain
+					in let terrain = supprimer_blocs terrain blocs_intersectants
+
+					(* la raquette intersecte-t-elle le chemin de la balle ? *)
+					in let balle =
+						(if intersect_rectangle npos dir (tuple_to_float raquette_position) (raquette_width, raquette_height)
+						then
+							(* inversion de x et de y *)
+							Balle ((posx, posy), (dirx, -.diry))
+						else
+							avancer_balle balle g_state)
+
 					in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_state))
 				end;
 			end;
@@ -182,7 +211,7 @@ let run () =
 	in let size_win_x = size_x win
 	in let size_win_y = size_y win
 	in let terrain = gen_terrain size_win_x size_win_y
-	in let balle = Balle ((float_of_int (size_win_x/2), float_of_int (raquette_height+balle_radius)), (1.5, 1.5))
+	in let balle = Balle ((float_of_int (size_win_x/2), float_of_int (raquette_height+balle_radius)), (2.5, 2.5))
 	in let raquette = Raquette ((size_win_x-raquette_width)/2, 0)
 	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
 	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial
