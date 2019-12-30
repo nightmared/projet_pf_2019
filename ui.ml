@@ -78,23 +78,23 @@ let dessiner_terrain (Terrain liste_blocs) =
 		draw_rect x y brique_width brique_height
 	) liste_blocs
 
-let dessiner_balle (Balle ((x, y), dir)) = draw_circle x y balle_radius
+let dessiner_balle (Balle ((x, y), dir)) = draw_circle (int_of_float x) (int_of_float y) balle_radius
 
 let dessiner_raquette (Raquette (x, y)) = draw_rect x y raquette_width raquette_height
 
 let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_y)) =
-	let (x, dx) = (if x+dx > win_size_x-balle_radius then
-		(win_size_x-balle_radius, -dx)
-	else if x+dx < 0 then
-		(balle_radius, -dx)
+	let (x, dx) = (if (int_of_float (x+.dx)) > win_size_x-balle_radius then
+		(float_of_int (win_size_x-balle_radius), -.dx)
+	else if (int_of_float (x+.dx)) < 0 then
+		(float_of_int balle_radius, -.dx)
 	else
-		(x+dx, dx))
-	in let (y, dy) = (if y+dy > win_size_y-balle_radius then
-		(win_size_y-balle_radius, -dy)
-	else if y+dy < 0 then
-		(balle_radius, -dy)
+		(x+.dx, dx))
+	in let (y, dy) = (if (int_of_float (y+.dy)) > win_size_y-balle_radius then
+		(float_of_int (win_size_y-balle_radius), -.dy)
+	else if (int_of_float (y+.dy)) < 0 then
+		(float_of_int balle_radius, -.dy)
 	else
-		(y+dy, dy))
+		(y+.dy, dy))
 	in (Balle ((x, y), (dx, dy)))
 
 (* déplace la raquette si possible *)
@@ -140,21 +140,24 @@ let main_loop () =
 		end
 	with Exit -> GreenThreadsState.exit ()
 
-(* Détecte les collisions et supprime les blocs détruits *)
+(* Fais avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
-	begin
-		while true do
-			GreenThreadsState.yield ();
-			(* le temps n'est malheureusement pas monotonique ici, on suppose que
-			 * ça ne posera pas de problèmes *)
-			let State (LocalState (terrain, balle, raquette), g_state) = GreenThreadsState.get ()
-			in begin
-				let balle = avancer_balle balle g_state
-				in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_state))
+	while true do
+		let start_time = Unix.gettimeofday () in
+			begin
+				(* calibré pour une frame toutes les 16ms *)
+				while Unix.gettimeofday () -. start_time < 1./.60. do
+					GreenThreadsState.yield ();
+				done;
+				(* le temps n'est malheureusement pas monotonique ici, on suppose que
+				 * ça ne posera pas de problèmes *)
+				let State (LocalState (terrain, balle, raquette), g_state) = GreenThreadsState.get ()
+				in begin
+					let balle = avancer_balle balle g_state
+					in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_state))
+				end;
 			end;
-		done;
-		GreenThreadsState.exit ()
-	end
+	done; GreenThreadsState.exit ()
 
 (* Dessine les différents objets à l'écran *)
 let dessiner () =
@@ -179,7 +182,7 @@ let run () =
 	in let size_win_x = size_x win
 	in let size_win_y = size_y win
 	in let terrain = gen_terrain size_win_x size_win_y
-	in let balle = Balle ((size_win_x/2, raquette_height+balle_radius), (15, 15))
+	in let balle = Balle ((float_of_int (size_win_x/2), float_of_int (raquette_height+balle_radius)), (1.5, 1.5))
 	in let raquette = Raquette ((size_win_x-raquette_width)/2, 0)
 	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
 	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial
