@@ -34,3 +34,9 @@ type state = State: local_state * global_state -> state
 
 (* Module d'ordonnancement coopératif des différentes tâches *)
 module GreenThreadsState = GreenThreads (struct type shift = state end)
+
+(* fonctions utilitaires *)
+let add_tuple (x, y) (x_prime, y_prime) = (x+.x_prime, y+.y_prime);;
+let sub_tuple (x, y) (x_prime, y_prime) = (x-.x_prime, y-.y_prime);;
+let tuple_to_float (x, y) = (float_of_int x, float_of_int y);;
+let tuple_to_int (x, y) = (int_of_float x, int_of_float y);;

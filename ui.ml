@@ -11,36 +11,25 @@ let raquette_height = 15
 (* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
 let raquette_offset = 30
 
-let balle_radius = 6
+let balle_radius = 6.
 
+(* retourne 'vrai' si le point est dans le rectangle *)
+let est_dans_rectangle (posx, posy) (rect_x, rect_y) (rect_width, rect_height) =
+	posx >= rect_x && posx <= rect_x + rect_width && posy >= rect_y && posy <= rect_y + rect_height
 
-(* outils utilitaires pour le calcul de collisions *)
-let minus_direction (x, y) (x_prime, y_prime) = (x-.x_prime, y-.y_prime);;
-let tuple_to_float (x, y) = (float_of_int x, float_of_int y);;
-let cross_product (x1, y1) (x2, y2) = x1*.y2 -. y1*.x2;;
+(* On vérifie les collisions de la manière suivante (la version précédente faisait
+ * du 'lancer de rayon' pour détecter les collisions, mais ce n'est pas très pratique
+ * puisque notre balle ne se réduit pas à un seul point *)
+let collision_rectangle (Balle (pos, dir)) rect rect_size =
+	(* on vérifie les collisions avec les quatres extrêmes de la 'bounding box' du cercle *)
+	(est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (0., balle_radius)))) rect rect_size
+	|| est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (balle_radius, 0.)))) rect rect_size
+	|| est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (0., -.balle_radius)))) rect rect_size
+	|| est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (-.balle_radius, 0.)))) rect rect_size)
 
-(* basé sur la méthode décrite sur https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect/565282 *)
-let intersect_ray p q r s =
-	let rs = cross_product r s
-	in let qpr = cross_product (minus_direction q p) r
-	in let qps = cross_product (minus_direction q p) s
-	in if rs <> 0. then
-		let u = qpr/.rs
-		in let t = qps/.rs
-		in u >= 0. && u <= 1. && t >= 0. && t <= 1.
-	(* le cas colinéaire signifie qu'il n'y a pas de collisions pour nous *)
-	else false;;
-
-let intersect_rectangle (x, y) dir rect (rect_width, rect_height) =
-	(* on vérifie les intersections avec les quatres côtés du rectangle *)
-	(intersect_ray (x, y) rect dir (tuple_to_float (0, rect_height))
-	|| intersect_ray (x, y) rect dir (tuple_to_float (rect_width, 0))
-	|| intersect_ray (x+.(float_of_int rect_width), y) rect dir (tuple_to_float (0, rect_height))
-	|| intersect_ray (x, y+.(float_of_int rect_height)) rect dir (tuple_to_float (rect_width, 0)))
-
-let intersect (Balle (pos, dir)) (Terrain terrain) =
+let collision balle (Terrain terrain) =
 	List.fold_left
-		(fun acc v -> let (Brique(rect, _, _)) = v in if intersect_rectangle pos dir (tuple_to_float rect) (brique_width, brique_height)
+		(fun acc v -> let (Brique(rect, _, _)) = v in if collision_rectangle balle rect (brique_width, brique_height)
 			then v::acc else acc
 		)
 		[]
@@ -84,21 +73,21 @@ let dessiner_terrain (Terrain liste_blocs) =
 		draw_rect x y brique_width brique_height
 	) liste_blocs
 
-let dessiner_balle (Balle ((x, y), dir)) = draw_circle (int_of_float x) (int_of_float y) balle_radius
+let dessiner_balle (Balle ((x, y), dir)) = draw_circle (int_of_float x) (int_of_float y) (int_of_float balle_radius)
 
 let dessiner_raquette (Raquette (x, y)) = draw_rect x y raquette_width raquette_height
 
 let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_y)) =
-	let (x, dx) = (if (int_of_float (x+.dx)) > win_size_x-balle_radius then
-		(float_of_int (win_size_x-balle_radius), -.dx)
+	let (x, dx) = (if x+.dx > (float_of_int win_size_x)-.balle_radius then
+		((float_of_int win_size_x)-.balle_radius, -.dx)
 	else if (int_of_float (x+.dx)) < 0 then
-		(float_of_int balle_radius, -.dx)
+		(balle_radius, -.dx)
 	else
 		(x+.dx, dx))
-	in let (y, dy) = (if (int_of_float (y+.dy)) > win_size_y-balle_radius then
-		(float_of_int (win_size_y-balle_radius), -.dy)
+	in let (y, dy) = (if y+.dy > (float_of_int win_size_y)-.balle_radius then
+		((float_of_int win_size_y)-.balle_radius, -.dy)
 	else if (int_of_float (y+.dy)) < 0 then
-		(float_of_int balle_radius, -.dy)
+		(balle_radius, -.dy)
 	else
 		(y+.dy, dy))
 	in (Balle ((x, y), (dx, dy)))
@@ -126,7 +115,7 @@ let gerer_entree_clavier (State (LocalState (terrain, balle, raquette), GlobalSt
 	end
 
 (* Boucle évènementielle pour dessiner la raquette *)
-let main_loop () =
+let boucle_principale () =
 	try
 		begin
 			(* pour empécher les artifacts graphiques avec le double buffering *)
@@ -159,24 +148,15 @@ let detecter_collisions () =
 				 * ça ne posera pas de problèmes *)
 				let State (LocalState (terrain, balle, raquette), g_state) = GreenThreadsState.get ()
 				in begin
-					(* normalise le vecteur pour détecter les collisions plus précisément:
-					* le bloc est détruit lorsque le bord du cercle atteint les blocs et
-					* non pas lorsque son centre les atteint *)
-					let Raquette raquette_position = raquette
-					in let Balle ((posx, posy), dir) = balle
-					in let (dirx, diry) = dir
-					in let offset = (float_of_int balle_radius /. (dirx *. dirx +. diry *. diry))
-					in let npos = (posx +. dirx *. offset, posy +. diry *. offset)
-					(* ceci représente la pointe de la balle *)
-					in let balle_virtuelle = Balle (npos, dir)
-
 					(* détection et suppression des blocs sur le chemin de la balle *)
-					in let blocs_intersectants = intersect balle_virtuelle terrain
-					in let terrain = supprimer_blocs terrain blocs_intersectants
+					let blocs_collisionants = collision balle terrain
+					in let terrain = supprimer_blocs terrain blocs_collisionants
 
-					(* la raquette intersecte-t-elle le chemin de la balle ? *)
+					(* la raquette collisione-t-elle le chemin de la balle ? *)
 					in let balle =
-						(if intersect_rectangle npos dir (tuple_to_float raquette_position) (raquette_width, raquette_height)
+						let Balle ((posx, posy), (dirx, diry)) = balle
+						in let Raquette raquette_position = raquette
+						in (if collision_rectangle balle raquette_position (raquette_width, raquette_height)
 						then
 							(* inversion de x et de y *)
 							Balle ((posx, posy), (dirx, -.diry))
@@ -211,7 +191,7 @@ let run () =
 	in let size_win_x = size_x win
 	in let size_win_y = size_y win
 	in let terrain = gen_terrain size_win_x size_win_y
-	in let balle = Balle ((float_of_int (size_win_x/2), float_of_int (raquette_height+balle_radius)), (2.5, 2.5))
+	in let balle = Balle ((float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius), (2.5, 2.5))
 	in let raquette = Raquette ((size_win_x-raquette_width)/2, 0)
 	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
-	in GreenThreadsState.scheduler [main_loop; detecter_collisions; dessiner] etat_initial
+	in GreenThreadsState.scheduler [boucle_principale; detecter_collisions; dessiner] etat_initial
