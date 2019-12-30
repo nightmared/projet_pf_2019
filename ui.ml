@@ -17,15 +17,22 @@ let balle_radius = 6.
 let est_dans_rectangle (posx, posy) (rect_x, rect_y) (rect_width, rect_height) =
 	posx >= rect_x && posx <= rect_x + rect_width && posy >= rect_y && posy <= rect_y + rect_height
 
+let collision_rectangle_haut_droite (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (balle_radius, balle_radius)))) rect rect_size
+let collision_rectangle_haut_gauche (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (-.balle_radius, balle_radius)))) rect rect_size
+let collision_rectangle_bas_droite (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (balle_radius, -.balle_radius)))) rect rect_size
+let collision_rectangle_bas_gauche (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (-.balle_radius, -.balle_radius)))) rect rect_size
+
 (* On vérifie les collisions de la manière suivante (la version précédente faisait
  * du 'lancer de rayon' pour détecter les collisions, mais ce n'est pas très pratique
  * puisque notre balle ne se réduit pas à un seul point *)
-let collision_rectangle (Balle (pos, dir)) rect rect_size =
+let collision_rectangle balle rect rect_size =
 	(* on vérifie les collisions avec les quatres extrêmes de la 'bounding box' du cercle *)
-	(est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (0., balle_radius)))) rect rect_size
-	|| est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (balle_radius, 0.)))) rect rect_size
-	|| est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (0., -.balle_radius)))) rect rect_size
-	|| est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (-.balle_radius, 0.)))) rect rect_size)
+	(collision_rectangle_bas_gauche balle rect rect_size
+	|| collision_rectangle_bas_droite balle rect rect_size
+	|| collision_rectangle_haut_gauche balle rect rect_size
+	|| collision_rectangle_haut_droite balle rect rect_size)
+
+
 
 let collision balle (Terrain terrain) =
 	List.fold_left
@@ -86,8 +93,6 @@ let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_
 		(x+.dx, dx))
 	in let (y, dy) = (if y+.dy > (float_of_int win_size_y)-.balle_radius then
 		((float_of_int win_size_y)-.balle_radius, -.dy)
-	else if (int_of_float (y+.dy)) < 0 then
-		(balle_radius, -.dy)
 	else
 		(y+.dy, dy))
 	in (Balle ((x, y), (dx, dy)))
@@ -115,7 +120,7 @@ let gerer_entree_clavier (State (LocalState (terrain, balle, raquette), GlobalSt
 	end
 
 (* Boucle évènementielle pour dessiner la raquette *)
-let boucle_principale () =
+let boucle_evenementielle () =
 	try
 		begin
 			(* pour empécher les artifacts graphiques avec le double buffering *)
@@ -126,9 +131,9 @@ let boucle_principale () =
 					(* nécessaire pour que l'évènement ne soit pas retourné à chaque poll(),
 					 * il faut vider le pool d'évènements *)
 					(let st = wait_next_event [ Key_pressed ]
-					in let state = GreenThreadsState.get ()
-					in let new_state = gerer_entree_clavier state st.key
-					in GreenThreadsState.send new_state);
+					in let etat = GreenThreadsState.get ()
+					in let new_etat = gerer_entree_clavier etat st.key
+					in GreenThreadsState.send new_etat);
 				GreenThreadsState.yield ();
 			done;
 			GreenThreadsState.exit ()
@@ -146,7 +151,7 @@ let detecter_collisions () =
 				done;
 				(* le temps n'est malheureusement pas monotonique ici, on suppose que
 				 * ça ne posera pas de problèmes *)
-				let State (LocalState (terrain, balle, raquette), g_state) = GreenThreadsState.get ()
+				let State (LocalState (terrain, balle, raquette), g_etat) = GreenThreadsState.get ()
 				in begin
 					(* détection et suppression des blocs sur le chemin de la balle *)
 					let blocs_collisionants = collision balle terrain
@@ -161,12 +166,29 @@ let detecter_collisions () =
 							(* inversion de x et de y *)
 							Balle ((posx, posy), (dirx, -.diry))
 						else
-							avancer_balle balle g_state)
-
-					in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_state))
+							avancer_balle balle g_etat)
+						in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_etat))
 				end;
 			end;
 	done; GreenThreadsState.exit ()
+
+let detecter_fin_du_jeu () =
+	begin
+		while true do
+			let State (LocalState (_, Balle ((_, y), _), _), _) = GreenThreadsState.get ()
+			in if y < 0. then
+				(* l'utilisateur a perdu *)
+				(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
+				 * d'excéder la taille de la raquette, et donc de déclarer game over sans
+				 * raison *)
+				GreenThreadsState.stop_scheduler ()
+			else
+				GreenThreadsState.yield ();
+		done;
+		(* la fonction 'exit' ne sera jamais exécutée mais est nécessaire pour que la fonction
+		 * soit valide du point de vue de son type *)
+		GreenThreadsState.exit ()
+	end
 
 (* Dessine les différents objets à l'écran *)
 let dessiner () =
@@ -194,4 +216,7 @@ let run () =
 	in let balle = Balle ((float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius), (2.5, 2.5))
 	in let raquette = Raquette ((size_win_x-raquette_width)/2, 0)
 	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
-	in GreenThreadsState.scheduler [boucle_principale; detecter_collisions; dessiner] etat_initial
+	in begin
+		GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] etat_initial;
+		print_endline "Game over !";
+	end

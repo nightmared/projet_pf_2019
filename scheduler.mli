@@ -7,4 +7,5 @@ module GreenThreads (M: sig type shift end) : sig
 	val send: M.shift -> unit
 	val yield: unit -> unit
 	val exit: unit -> M.shift res
+	val stop_scheduler: unit -> unit
 end

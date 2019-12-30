@@ -2,6 +2,7 @@ type 'shift res =
 	| Get of (('shift -> 'shift res))
 	| Send of ((unit -> 'shift res) * 'shift)
 	| Yield of ((unit -> 'shift res))
+	| StopScheduler
 	| Exit
 
 module GreenThreads (M: sig type shift end) = struct
@@ -16,12 +17,14 @@ module GreenThreads (M: sig type shift end) = struct
 			| Send (old_proc, v) -> scheduler (old_proc::q) v
 			(* Yield donne la main au processus suivant de la chaîne 'tasks' *)
 			| Yield old_proc -> scheduler (q@[old_proc]) val_init
+			| StopScheduler -> ()
 			| Exit -> scheduler q val_init)
 
 	let get () = Delimcc.shift p (fun k -> Get (k))
 	let send v = Delimcc.shift p (fun k -> Send (k, v))
 	let yield () = Delimcc.shift p (fun k -> Yield (k))
 	let exit () = Delimcc.shift p (fun _ -> Exit)
+	let stop_scheduler () = Delimcc.shift p (fun _ -> StopScheduler)
 end
 
 (*
