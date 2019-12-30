@@ -163,8 +163,8 @@ let detecter_collisions () =
 						in let Raquette raquette_position = raquette
 						in (if collision_rectangle balle raquette_position (raquette_width, raquette_height)
 						then
-							(* inversion de x et de y *)
-							Balle ((posx, posy), (dirx, -.diry))
+							(* inversion de y *)
+							Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx, -.diry))
 						else
 							avancer_balle balle g_etat)
 						in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_etat))
