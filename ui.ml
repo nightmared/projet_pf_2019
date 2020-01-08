@@ -9,7 +9,7 @@ let brique_border = 10
 let raquette_width = 20
 let raquette_height = 15
 (* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
-let raquette_offset = 30
+let raquette_offset = 10
 
 let balle_radius = 6.
 
@@ -104,17 +104,16 @@ let deplacer_raquette (Raquette (x, y)) win_size gauche =
 	else
 		(if x+raquette_offset >= win_size then (Raquette (win_size-raquette_width, y)) else (Raquette (x+raquette_offset, y)))
 
-(* modifie l'état en fonction de l'entrée clavier *)
-let gerer_entree_clavier (State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y))) key =
+(* modifie l'état en fonction des mouvements de la souris *)
+let gerer_entree_souris (State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y))) x =
 	begin
-		let raquette =
-			(if key = 'd' then
+		let Raquette ((posx, _)) = raquette
+		in let raquette =
+			(if x > posx+raquette_width then
 				deplacer_raquette raquette win_size_x false
-			else
-				if key = 'q' then
-					deplacer_raquette raquette win_size_x true
-				else
-					raquette)
+			else if x < posx then
+				deplacer_raquette raquette win_size_x true
+				else raquette)
 		in
 			(State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y)))
 	end
@@ -127,13 +126,9 @@ let boucle_evenementielle () =
 			auto_synchronize false;
 			while true do
 				let st = wait_next_event [ Poll ]
-				in if st.keypressed then
-					(* nécessaire pour que l'évènement ne soit pas retourné à chaque poll(),
-					 * il faut vider le pool d'évènements *)
-					(let st = wait_next_event [ Key_pressed ]
-					in let etat = GreenThreadsState.get ()
-					in let new_etat = gerer_entree_clavier etat st.key
-					in GreenThreadsState.send new_etat);
+				in let etat = GreenThreadsState.get ()
+				in let new_etat = gerer_entree_souris etat st.mouse_x
+				in GreenThreadsState.send new_etat;
 				GreenThreadsState.yield ();
 			done;
 			GreenThreadsState.exit ()
