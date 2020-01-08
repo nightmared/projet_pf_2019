@@ -140,34 +140,40 @@ let boucle_evenementielle () =
 		end
 	with Exit -> GreenThreadsState.exit ()
 
+(* détecte une collision entre la balle et la raquette *)
+let detecter_collision_raquette balle (Raquette raquette_position) g_etat =
+	let Balle ((posx, posy), (dirx, diry)) = balle
+	in if collision_rectangle balle raquette_position (raquette_width, raquette_height)
+	then
+		(* inversion de y *)
+		Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx, -.diry))
+	else
+		avancer_balle balle g_etat
+
+(* accélère légèrement la balle *)
+let accelerer_balle (Balle (pos, (dirx, diry))) =
+	Balle (pos, (min (dirx*.1.0005) (dirx+.0.005), min (diry*.1.0005) (diry+.0.005)))
+
+
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
 	while true do
 		let start_time = Unix.gettimeofday () in
 			begin
-				(* calibré pour une frame toutes les 16ms *)
+				(* Ce programme ne s'exécute que toutes les 16ms,
+				 * soit à une fréquence de 60Hz (fréquence de rafraichissement de l'écran).
+				 * Attention: le temps n'est malheureusement pas monotonique ici, on suppose
+				 * que ça ne posera pas tro pde problèmes *)
 				while Unix.gettimeofday () -. start_time < 1./.60. do
 					GreenThreadsState.yield ();
 				done;
-				(* le temps n'est malheureusement pas monotonique ici, on suppose que
-				 * ça ne posera pas de problèmes *)
 				let State (LocalState (terrain, balle, raquette), g_etat) = GreenThreadsState.get ()
 				in begin
 					(* détection et suppression des blocs sur le chemin de la balle *)
 					let blocs_collisionants = collision balle terrain
 					in let terrain = supprimer_blocs terrain blocs_collisionants
-
-					(* la raquette collisione-t-elle le chemin de la balle ? *)
-					in let balle =
-						let Balle ((posx, posy), (dirx, diry)) = balle
-						in let Raquette raquette_position = raquette
-						in (if collision_rectangle balle raquette_position (raquette_width, raquette_height)
-						then
-							(* inversion de y *)
-							Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx, -.diry))
-						else
-							avancer_balle balle g_etat)
-						in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_etat))
+					in let balle = accelerer_balle (detecter_collision_raquette balle raquette g_etat)
+					in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_etat))
 				end;
 			end;
 	done; GreenThreadsState.exit ()
