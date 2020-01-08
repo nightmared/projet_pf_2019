@@ -73,6 +73,13 @@ let gen_terrain width height =
 			)
 		)
 
+let etat_initial (size_win_x, size_win_y) =
+	let terrain = gen_terrain size_win_x size_win_y
+	in let balle = Balle ((float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius), (4.5, 4.5))
+	in let raquette = Raquette (((size_win_x-raquette_width)/2, 0), (0., 0.))
+	in State (LocalState (Terrain terrain, balle, raquette), GlobalState ((size_win_x, size_win_y), 3))
+
+
 (* supprime une liste de blocs du terrain *)
 let supprimer_blocs (Terrain terrain) l =
 	Terrain
@@ -194,13 +201,20 @@ let detecter_collisions () =
 let detecter_fin_du_jeu () =
 	begin
 		while true do
-			let (_, y) = balle_get_pos (etat_get_balle (GreenThreadsState.get ()))
+			let etat = GreenThreadsState.get ()
+			in let (_, y) = balle_get_pos (etat_get_balle (etat))
 			in if y < 0. then
-				(* l'utilisateur a perdu *)
-				(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
-				 * d'excéder la taille de la raquette, et donc de déclarer game over sans
-				 * raison *)
-				GreenThreadsState.stop_scheduler ()
+				let nb_vies = etat_get_nb_vies etat
+				in (if nb_vies = 1 then
+					(* l'utilisateur a perdu *)
+					(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
+					 * d'excéder la taille de la raquette, et donc de déclarer game over sans
+					 * raison *)
+					GreenThreadsState.stop_scheduler ()
+				else
+					(* réinitialisation du jeu avec mise à jour du nombre de parties restantes *)
+					let etat = etat_update_nb_vies (etat_initial (etat_get_win_size etat)) (nb_vies-1)
+					in GreenThreadsState.send etat)
 			else
 				GreenThreadsState.yield ();
 		done;
@@ -228,17 +242,10 @@ let dessiner () =
 
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
-	while true do 
-		let win = open_graph " 640x480"
-		in let size_win_x = size_x win
-		in let size_win_y = size_y win
-		in let terrain = gen_terrain size_win_x size_win_y
-		in let balle = Balle ((float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius), (4.5, 4.5))
-		in let raquette = Raquette (((size_win_x-raquette_width)/2, 0), (0., 0.))
-		in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
-		in
-		begin
-			GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] etat_initial;
-			print_endline "Game over !";
-		end
-	done
+	let win = open_graph " 640x480"
+	in let size_win_x = size_x win
+	in let size_win_y = size_y win
+	in begin
+		GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial (size_win_x, size_win_y));
+		print_endline "Game over !";
+	end
