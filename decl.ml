@@ -6,6 +6,7 @@ type properties = NilProp
 type position = int * int
 type floating_position = float * float
 type direction = float * float
+type vitesse_deplacement = float * float
 
 
 (* La brique a une durée de vie, et elle sera supprimée (à la charge de l'appelant)
@@ -22,7 +23,7 @@ type terrain = Terrain: brique list -> terrain
 
 type balle = Balle: floating_position * direction -> balle
 
-type raquette = Raquette: position -> raquette
+type raquette = Raquette: position * vitesse_deplacement -> raquette
 
 type win_size = int * int
 

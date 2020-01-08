@@ -6,7 +6,7 @@ let brique_width = 25
 let brique_height = 15
 let brique_border = 10
 
-let raquette_width = 20
+let raquette_width = 35
 let raquette_height = 15
 (* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
 let raquette_offset = 10
@@ -82,7 +82,7 @@ let dessiner_terrain (Terrain liste_blocs) =
 
 let dessiner_balle (Balle ((x, y), dir)) = draw_circle (int_of_float x) (int_of_float y) (int_of_float balle_radius)
 
-let dessiner_raquette (Raquette (x, y)) = draw_rect x y raquette_width raquette_height
+let dessiner_raquette (Raquette ((x, y), _)) = draw_rect x y raquette_width raquette_height
 
 let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_y)) =
 	let (x, dx) = (if x+.dx > (float_of_int win_size_x)-.balle_radius then
@@ -98,23 +98,25 @@ let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_
 	in (Balle ((x, y), (dx, dy)))
 
 (* déplace la raquette si possible *)
-let deplacer_raquette (Raquette (x, y)) win_size gauche =
+let deplacer_raquette (Raquette ((x, y), _)) win_size gauche =
 	if gauche then
-		(if x-raquette_offset < 0 then (Raquette (0, y)) else (Raquette (x-raquette_offset, y)))
+		Raquette ((if x-raquette_offset < 0 then (0, y) else (x-raquette_offset, y)), (-.(float_of_int raquette_offset), 0.))
 	else
-		(if x+raquette_offset >= win_size then (Raquette (win_size-raquette_width, y)) else (Raquette (x+raquette_offset, y)))
+		Raquette ((if x+raquette_offset >= win_size then (win_size-raquette_width, y) else (x+raquette_offset, y)), (float_of_int raquette_offset, 0.))
 
 (* modifie l'état en fonction des mouvements de la souris *)
 let gerer_entree_souris (State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y))) x =
 	begin
-		let Raquette ((posx, _)) = raquette
-		in let raquette =
+		let Raquette (((posx, _), _)) = raquette
+		in let new_raquette =
 			(if x > posx+raquette_width then
 				deplacer_raquette raquette win_size_x false
 			else if x < posx then
 				deplacer_raquette raquette win_size_x true
 				else raquette)
-		in
+		in if new_raquette <> raquette then
+			(State (LocalState (terrain, balle, new_raquette), GlobalState (win_size_x, win_size_y)))
+			else
 			(State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y)))
 	end
 
@@ -135,13 +137,13 @@ let boucle_evenementielle () =
 		end
 	with Exit -> GreenThreadsState.exit ()
 
-(* détecte une collision entre la balle et la raquette *)
-let detecter_collision_raquette balle (Raquette raquette_position) g_etat =
+(* détecte une collision entre la balle et la raquette, et fait avancer la balle *)
+let faire_evoluer_balle balle (Raquette (raquette_position, (raquette_vitesse_x, _))) g_etat =
 	let Balle ((posx, posy), (dirx, diry)) = balle
 	in if collision_rectangle balle raquette_position (raquette_width, raquette_height)
 	then
-		(* inversion de y *)
-		Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx, -.diry))
+		(* inversion de y et accélération de la vitesse de déplacement horizontale *)
+		Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx+.raquette_vitesse_x/.10., -.diry))
 	else
 		avancer_balle balle g_etat
 
@@ -167,7 +169,7 @@ let detecter_collisions () =
 					(* détection et suppression des blocs sur le chemin de la balle *)
 					let blocs_collisionants = collision balle terrain
 					in let terrain = supprimer_blocs terrain blocs_collisionants
-					in let balle = accelerer_balle (detecter_collision_raquette balle raquette g_etat)
+					in let balle = accelerer_balle (faire_evoluer_balle balle raquette g_etat)
 					in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_etat))
 				end;
 			end;
@@ -210,14 +212,17 @@ let dessiner () =
 
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
-	let win = open_graph " 640x480"
-	in let size_win_x = size_x win
-	in let size_win_y = size_y win
-	in let terrain = gen_terrain size_win_x size_win_y
-	in let balle = Balle ((float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius), (2.5, 2.5))
-	in let raquette = Raquette ((size_win_x-raquette_width)/2, 0)
-	in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
-	in begin
-		GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] etat_initial;
-		print_endline "Game over !";
-	end
+	while true do 
+		let win = open_graph " 640x480"
+		in let size_win_x = size_x win
+		in let size_win_y = size_y win
+		in let terrain = gen_terrain size_win_x size_win_y
+		in let balle = Balle ((float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius), (4.5, 4.5))
+		in let raquette = Raquette (((size_win_x-raquette_width)/2, 0), (0., 0.))
+		in let etat_initial = (State (LocalState (Terrain terrain, balle, raquette), GlobalState (size_win_x, size_win_y)))
+		in
+		begin
+			GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] etat_initial;
+			print_endline "Game over !";
+		end
+	done
