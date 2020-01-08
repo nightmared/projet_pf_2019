@@ -13,14 +13,21 @@ let raquette_offset = 10
 
 let balle_radius = 6.
 
+
+let draw_rect (x, y) (w, h) = draw_rect x y w h
+
 (* retourne 'vrai' si le point est dans le rectangle *)
 let est_dans_rectangle (posx, posy) (rect_x, rect_y) (rect_width, rect_height) =
 	posx >= rect_x && posx <= rect_x + rect_width && posy >= rect_y && posy <= rect_y + rect_height
 
-let collision_rectangle_haut_droite (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (balle_radius, balle_radius)))) rect rect_size
-let collision_rectangle_haut_gauche (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (-.balle_radius, balle_radius)))) rect rect_size
-let collision_rectangle_bas_droite (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (balle_radius, -.balle_radius)))) rect rect_size
-let collision_rectangle_bas_gauche (Balle (pos, dir)) rect rect_size = est_dans_rectangle (tuple_to_int (add_tuple pos (add_tuple dir (-.balle_radius, -.balle_radius)))) rect rect_size
+let collision_rectangle_haut_droite balle rect rect_size =
+	est_dans_rectangle (tuple_to_int (add_tuple (balle_get_pos balle) (add_tuple (balle_get_dir balle) (balle_radius, balle_radius)))) rect rect_size
+let collision_rectangle_haut_gauche balle rect rect_size =
+	est_dans_rectangle (tuple_to_int (add_tuple (balle_get_pos balle) (add_tuple (balle_get_dir balle) (-.balle_radius, balle_radius)))) rect rect_size
+let collision_rectangle_bas_droite balle rect rect_size =
+	est_dans_rectangle (tuple_to_int (add_tuple (balle_get_pos balle) (add_tuple (balle_get_dir balle) (balle_radius, -.balle_radius)))) rect rect_size
+let collision_rectangle_bas_gauche balle rect rect_size =
+	est_dans_rectangle (tuple_to_int (add_tuple (balle_get_pos balle) (add_tuple (balle_get_dir balle) (-.balle_radius, -.balle_radius)))) rect rect_size
 
 (* On vérifie les collisions de la manière suivante (la version précédente faisait
  * du 'lancer de rayon' pour détecter les collisions, mais ce n'est pas très pratique
@@ -35,12 +42,9 @@ let collision_rectangle balle rect rect_size =
 
 
 let collision balle (Terrain terrain) =
-	List.fold_left
-		(fun acc v -> let (Brique(rect, _, _)) = v in if collision_rectangle balle rect (brique_width, brique_height)
-			then v::acc else acc
-		)
-		[]
-		terrain;;
+	List.filter
+		(fun brique -> collision_rectangle balle (brique_get_pos brique) (brique_width, brique_height))
+		terrain
 
 let gen_brique x_idx y_idx _ height =
 	Brique (
@@ -76,21 +80,27 @@ let supprimer_blocs (Terrain terrain) l =
 
 
 let dessiner_terrain (Terrain liste_blocs) =
-	List.iter (fun (Brique ((x, y), _, _)) ->
-		draw_rect x y brique_width brique_height
+	List.iter (fun brique ->
+		draw_rect (brique_get_pos brique) (brique_width, brique_height)
 	) liste_blocs
 
-let dessiner_balle (Balle ((x, y), dir)) = draw_circle (int_of_float x) (int_of_float y) (int_of_float balle_radius)
+let dessiner_balle balle =
+	let (x, y) = tuple_to_int (balle_get_pos balle)
+	in draw_circle x y (int_of_float balle_radius)
 
-let dessiner_raquette (Raquette ((x, y), _)) = draw_rect x y raquette_width raquette_height
+let dessiner_raquette raquette = draw_rect (raquette_get_pos raquette) (raquette_width, raquette_height)
 
-let avancer_balle (Balle ((x, y), (dx, dy))) (GlobalState (win_size_x, win_size_y)) =
-	let (x, dx) = (if x+.dx > (float_of_int win_size_x)-.balle_radius then
-		((float_of_int win_size_x)-.balle_radius, -.dx)
-	else if (int_of_float (x+.dx)) < 0 then
-		(balle_radius, -.dx)
-	else
-		(x+.dx, dx))
+let avancer_balle balle etat =
+	let (x, y) = balle_get_pos balle
+	in let (dx, dy) = balle_get_dir balle
+	in let (win_size_x, win_size_y) = etat_get_win_size etat
+	in let (x, dx) =
+		(if x+.dx > (float_of_int win_size_x)-.balle_radius then
+			((float_of_int win_size_x)-.balle_radius, -.dx)
+		else if (int_of_float (x+.dx)) < 0 then
+			(balle_radius, -.dx)
+		else
+			(x+.dx, dx))
 	in let (y, dy) = (if y+.dy > (float_of_int win_size_y)-.balle_radius then
 		((float_of_int win_size_y)-.balle_radius, -.dy)
 	else
@@ -105,9 +115,11 @@ let deplacer_raquette (Raquette ((x, y), _)) win_size gauche =
 		Raquette ((if x+raquette_offset >= win_size then (win_size-raquette_width, y) else (x+raquette_offset, y)), (float_of_int raquette_offset, 0.))
 
 (* modifie l'état en fonction des mouvements de la souris *)
-let gerer_entree_souris (State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y))) x =
+let gerer_entree_souris etat x =
 	begin
-		let Raquette (((posx, _), _)) = raquette
+		let raquette = etat_get_raquette etat
+		in let (posx, _) = raquette_get_pos raquette
+		in let (win_size_x, _) = etat_get_win_size etat
 		in let new_raquette =
 			(if x > posx+raquette_width then
 				deplacer_raquette raquette win_size_x false
@@ -115,9 +127,9 @@ let gerer_entree_souris (State (LocalState (terrain, balle, raquette), GlobalSta
 				deplacer_raquette raquette win_size_x true
 				else raquette)
 		in if new_raquette <> raquette then
-			(State (LocalState (terrain, balle, new_raquette), GlobalState (win_size_x, win_size_y)))
-			else
-			(State (LocalState (terrain, balle, raquette), GlobalState (win_size_x, win_size_y)))
+			etat_update_raquette etat new_raquette
+		else
+			etat
 	end
 
 (* Boucle évènementielle pour dessiner la raquette *)
@@ -138,18 +150,20 @@ let boucle_evenementielle () =
 	with Exit -> GreenThreadsState.exit ()
 
 (* détecte une collision entre la balle et la raquette, et fait avancer la balle *)
-let faire_evoluer_balle balle (Raquette (raquette_position, (raquette_vitesse_x, _))) g_etat =
-	let Balle ((posx, posy), (dirx, diry)) = balle
-	in if collision_rectangle balle raquette_position (raquette_width, raquette_height)
+let faire_evoluer_balle balle raquette etat =
+	let (posx, _) = balle_get_pos balle
+	in let (dirx, diry) = balle_get_dir balle
+	in if collision_rectangle balle (raquette_get_pos raquette) (raquette_width, raquette_height)
 	then
+		let (raquette_vitesse_x, _) = raquette_get_speed raquette
 		(* inversion de y et accélération de la vitesse de déplacement horizontale *)
-		Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx+.raquette_vitesse_x/.10., -.diry))
+		in Balle ((posx+.dirx, (float_of_int raquette_height)+.balle_radius), (dirx+.raquette_vitesse_x/.10., -.diry))
 	else
-		avancer_balle balle g_etat
+		avancer_balle balle etat
 
 (* accélère légèrement la balle *)
 let accelerer_balle (Balle (pos, (dirx, diry))) =
-	Balle (pos, (min (dirx*.1.0005) (dirx+.0.005), min (diry*.1.0005) (diry+.0.005)))
+	Balle (pos, (min (dirx*.1.0005) 5., min (diry*.1.0005) 5.))
 
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
@@ -164,13 +178,15 @@ let detecter_collisions () =
 				while Unix.gettimeofday () -. start_time < 1./.60. do
 					GreenThreadsState.yield ();
 				done;
-				let State (LocalState (terrain, balle, raquette), g_etat) = GreenThreadsState.get ()
+				let etat = GreenThreadsState.get ()
 				in begin
+					let balle = etat_get_balle etat
+					in let terrain = etat_get_terrain etat
 					(* détection et suppression des blocs sur le chemin de la balle *)
-					let blocs_collisionants = collision balle terrain
+					in let blocs_collisionants = collision balle terrain
 					in let terrain = supprimer_blocs terrain blocs_collisionants
-					in let balle = accelerer_balle (faire_evoluer_balle balle raquette g_etat)
-					in GreenThreadsState.send (State (LocalState (terrain, balle, raquette), g_etat))
+					in let balle = accelerer_balle (faire_evoluer_balle balle (etat_get_raquette etat) etat)
+					in GreenThreadsState.send (etat_update_balle (etat_update_terrain etat terrain) balle)
 				end;
 			end;
 	done; GreenThreadsState.exit ()
@@ -178,7 +194,7 @@ let detecter_collisions () =
 let detecter_fin_du_jeu () =
 	begin
 		while true do
-			let State (LocalState (_, Balle ((_, y), _), _), _) = GreenThreadsState.get ()
+			let (_, y) = balle_get_pos (etat_get_balle (GreenThreadsState.get ()))
 			in if y < 0. then
 				(* l'utilisateur a perdu *)
 				(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
@@ -197,7 +213,7 @@ let detecter_fin_du_jeu () =
 let dessiner () =
 	begin
 		while true do
-			let State (LocalState (terrain, balle, raquette), _) = GreenThreadsState.get ()
+			let LocalState (terrain, balle, raquette) = etat_get_local (GreenThreadsState.get ())
 			in begin
 				clear_graph ();
 				dessiner_terrain terrain;

@@ -33,6 +33,24 @@ type global_etat = GlobalState: win_size -> global_etat
 type etat = State: local_etat * global_etat -> etat
 
 
+let raquette_get_pos (Raquette (pos, _)) = pos
+let raquette_get_speed (Raquette (_, speed)) = speed
+let balle_get_pos (Balle (pos, _)) = pos
+let balle_get_dir (Balle (_, dir)) = dir
+let brique_get_pos (Brique (pos, _, _)) = pos
+let etat_get_local (State (local, _)) = local
+let etat_get_global (State (_, global)) = global
+let etat_get_win_size etat = let GlobalState win_size = etat_get_global etat in win_size
+let etat_get_terrain etat = let LocalState (terrain, _, _) = etat_get_local etat in terrain
+let etat_get_balle etat = let LocalState (_, balle, _) = etat_get_local etat in balle
+let etat_get_raquette etat = let LocalState (_, _, raquette) = etat_get_local etat in raquette
+let etat_update_terrain (State ((LocalState (_, balle, raquette)), g_etat)) terrain =
+	State (LocalState (terrain, balle, raquette), g_etat)
+let etat_update_balle (State ((LocalState (terrain, _, raquette)), g_etat)) balle =
+	State (LocalState (terrain, balle, raquette), g_etat)
+let etat_update_raquette (State ((LocalState (terrain, balle, _)), g_etat)) raquette =
+	State (LocalState (terrain, balle, raquette), g_etat)
+
 (* Module d'ordonnancement coopératif des différentes tâches *)
 module GreenThreadsState = GreenThreads (struct type shift = etat end)
 
