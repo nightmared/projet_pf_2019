@@ -172,6 +172,28 @@ let faire_evoluer_balle balle raquette etat =
 let accelerer_balle (Balle (pos, (dirx, diry))) =
 	Balle (pos, (min (dirx*.1.0005) 5., min (diry*.1.0005) 5.))
 
+let rebond_brique balle briques = 
+	if List.length briques > 0
+	then
+		let brique = List.hd briques
+		in let (posx, posy) = balle_get_pos balle
+		in let (dirx, diry) = balle_get_dir balle
+		in let (posbx, posby) = brique_get_pos brique
+		in if (collision_rectangle balle (posbx, posby) (brique_width, brique_height))
+		then
+			if (posx >= (float_of_int (posbx+brique_width))) && (posy <= (float_of_int (posby+brique_height)) && (posy >= (float_of_int (posby))))
+				|| (posx <= (float_of_int (posbx)) && (posy <= (float_of_int (posby+brique_height))) && (posy >= (float_of_int (posby))))
+			(* Répartition de l'espace autour de la brique en 8 zones à la manière d'un quadrillage 3x3 (la brique au centre)
+			si la balle se trouve dans la zone directement à droite ou à gauche de la brique, alors rebond sur une surface verticale*)
+			then 
+				Balle ((posx-.dirx, posy+.diry), (-.dirx, diry))
+			else (* sinon, rebond sur surface horizontale *)
+				Balle ((posx+.dirx, posy-.diry), (dirx, -.diry))
+			(* à l'heure actuelle, les zones correspondants aux coins de la brique ne sont pas traitées... *)
+		else (* pas de rebond, on re change rien *)
+			balle
+	else
+		balle
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
@@ -181,7 +203,7 @@ let detecter_collisions () =
 				(* Ce programme ne s'exécute que toutes les 16ms,
 				 * soit à une fréquence de 60Hz (fréquence de rafraichissement de l'écran).
 				 * Attention: le temps n'est malheureusement pas monotonique ici, on suppose
-				 * que ça ne posera pas tro pde problèmes *)
+				 * que ça ne posera pas trop de problèmes *)
 				while Unix.gettimeofday () -. start_time < 1./.60. do
 					GreenThreadsState.yield ();
 				done;
@@ -191,8 +213,8 @@ let detecter_collisions () =
 					in let terrain = etat_get_terrain etat
 					(* détection et suppression des blocs sur le chemin de la balle *)
 					in let blocs_collisionants = collision balle terrain
+					in let balle = rebond_brique (accelerer_balle (faire_evoluer_balle balle (etat_get_raquette etat) etat)) blocs_collisionants
 					in let terrain = supprimer_blocs terrain blocs_collisionants
-					in let balle = accelerer_balle (faire_evoluer_balle balle (etat_get_raquette etat) etat)
 					in GreenThreadsState.send (etat_update_balle (etat_update_terrain etat terrain) balle)
 				end;
 			end;
