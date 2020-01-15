@@ -291,6 +291,12 @@ let dessiner () =
 		GreenThreadsState.exit ()
 	end
 
+let draw_string_centered text = 
+	let w,h = text_size text in
+	let x, y = current_point () in 
+	moveto (x - w/2) (y- h/2);
+	draw_string text;; 
+
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
 	let win = open_graph " 640x480"
@@ -298,5 +304,9 @@ let run () =
 	in let size_win_y = size_y win
 	in begin
 		GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial (size_win_x, size_win_y));
-		print_endline "Game over !";
+		clear_graph();
+		moveto (size_win_x / 2) (size_win_y / 2);
+		set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
+		draw_string_centered "Game over!";
+		synchronize ();
 	end
