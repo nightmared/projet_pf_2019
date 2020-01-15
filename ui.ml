@@ -1,20 +1,11 @@
 open Graphics
-
+open Plateau
 open Decl
 
-let brique_width = 25
-let brique_height = 15
-let brique_border = 10
-
-let raquette_width = 35
-let raquette_height = 15
-(* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
-let raquette_offset = 10
-
-let balle_radius = 6.
 
 
-let draw_rect (x, y) (w, h) = draw_rect x y w h
+let draw_rect (x, y) (w, h) = draw_rect x y w h;;
+let fill_rect (x,y) (w, h) = fill_rect x y w h;;
 
 (* retourne 'vrai' si le point est dans le rectangle *)
 let est_dans_rectangle (posx, posy) (rect_x, rect_y) (rect_width, rect_height) =
@@ -49,47 +40,10 @@ let collision balle (terrain : terrain) =
 		(fun  (brique : brique) -> collision_rectangle balle (brique.position) (brique_width, brique_height))
 		terrain;;
 
-let gen_brique x_idx y_idx _ height : brique =
-	{
-		position = (((x_idx + 1) * brique_border + (x_idx) * brique_width),
-		height-((y_idx + 1) * brique_border + (y_idx-1) * brique_height));
-		lifetime = Int 1 ; 
-		properties = { color = blue; value = 1}
-	};;
-
-(* TODO: ajouter de l'aléatoire là-dedans - c'est la raison d'être de l'utilisation
- * du type Option ici *)
-let gen_terrain width height =
-	(* solution entière de l'équation width =
-	 * (nb_briques_par_ligne+1)*brique_border+nb_briques_par_ligne*brique_width *)
-	let nb_briques_par_ligne = (width-brique_border)/(brique_border+brique_width)
-	(* on réserve quelques lignes en bas pour que le jeu soit jouable *)
-	in let nb_briques_par_colonne = (height-brique_border)/(brique_border+brique_height) - 6
-	(* on conserve uniquement les éléments non nuls *)
-	in let liste_briques = List.filter_map
-		(fun x -> x)
-		(List.flatten
-			(List.init nb_briques_par_ligne
-				(fun x_idx -> List.init nb_briques_par_colonne
-					(fun y_idx -> Some(gen_brique x_idx y_idx width height))
-				)
-			)
-		) in
-		liste_briques;;
 
 
-let etat_local_initial (size_win_x, size_win_y)  : local_etat =
-	let terrain = gen_terrain size_win_x size_win_y
-	in let balle = { 
-		pos = float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius ; 
-		direction = (4.5, 4.5)
-	}
-	in let raquette = { 
-			position = ((size_win_x-raquette_width)/2, 0) ;
-			vitesse_deplacement = (0., 0.)
-	}
-	in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3};;
-	
+
+
 
 let etat_initial window_size =
 	{ 
@@ -108,10 +62,10 @@ let supprimer_blocs (terrain : terrain) (l: brique list) =
 
 let dessiner_terrain (liste_blocs : terrain) =
 	List.iter (fun (brique : brique) ->
-		let w, h = brique.position in
 		set_color brique.properties.color;
-		fill_rect w h brique_width brique_height;
+		fill_rect brique.position (brique_width,brique_height);
 		set_color foreground;
+		draw_rect brique.position (brique_width,brique_height);
 	) liste_blocs
 
 let dessiner_balle (balle: balle) =
