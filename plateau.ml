@@ -28,11 +28,12 @@ let type_briques = [
 ]
 
 let gen_brique x_idx y_idx _ height : brique =
-	{
+	let lifetime = Random.int (List.length type_briques)
+	in {
 		position = (((x_idx + 1) * brique_border + (x_idx) * brique_width),
 		height-((y_idx + 1) * brique_border + (y_idx-1) * brique_height));
-		lifetime = Int 1 ; 
-		properties = List.nth type_briques (Random.int (List.length type_briques))
+		lifetime = if lifetime = 0 then Infinity else Int (lifetime/3);
+		properties = List.nth type_briques lifetime
 	}
 
 let gen_terrain width height =

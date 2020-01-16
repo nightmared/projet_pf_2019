@@ -34,16 +34,10 @@ let collision_rectangle (balle: balle) rect rect_size =
 	|| collision_rectangle_haut_droite balle rect rect_size)
 
 
-
 let collision balle (terrain : terrain) =
 	List.filter
 		(fun  (brique : brique) -> collision_rectangle balle (brique.position) (brique_width, brique_height))
 		terrain
-
-
-
-
-
 
 let etat_initial window_size =
 	{ 
@@ -51,14 +45,25 @@ let etat_initial window_size =
 		etat_global = { window_size = window_size; score = 0}
 	}
 
-
+let abaisser_duree_de_vie brique =
+	match brique.lifetime with
+	| Infinity -> Some brique
+	| Int old_lifetime ->
+			if old_lifetime = 1
+			then None
+			else Some { brique with lifetime = Int (old_lifetime - 1) }
 
 (* supprime une liste de blocs du terrain *)
 let supprimer_blocs (terrain : terrain) (l: brique list) =
-		List.fold_left (fun acc e -> 
-		List.filter_map (fun x -> if x = e then None else Some(x)) acc) 
-		terrain l
-
+		List.fold_left
+			(fun acc e -> 
+				let e_prime = abaisser_duree_de_vie e
+				in List.filter_map
+					(fun x -> if x = e then e_prime else Some(x))
+					acc
+			)
+			terrain
+			l
 
 let dessiner_terrain (liste_blocs : terrain) =
 	List.iter (fun (brique : brique) ->
