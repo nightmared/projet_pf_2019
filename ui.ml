@@ -4,8 +4,8 @@ open Decl
 
 
 
-let draw_rect (x, y) (w, h) = draw_rect x y w h;;
-let fill_rect (x,y) (w, h) = fill_rect x y w h;;
+let draw_rect (x, y) (w, h) = draw_rect x y w h
+let fill_rect (x,y) (w, h) = fill_rect x y w h
 
 (* retourne 'vrai' si le point est dans le rectangle *)
 let est_dans_rectangle (posx, posy) (rect_x, rect_y) (rect_width, rect_height) =
@@ -38,7 +38,7 @@ let collision_rectangle (balle: balle) rect rect_size =
 let collision balle (terrain : terrain) =
 	List.filter
 		(fun  (brique : brique) -> collision_rectangle balle (brique.position) (brique_width, brique_height))
-		terrain;;
+		terrain
 
 
 
@@ -47,9 +47,9 @@ let collision balle (terrain : terrain) =
 
 let etat_initial window_size =
 	{ 
-		local_etat = etat_local_initial (window_size);
-		global_etat = { window_size = window_size; score = 0}
-	};;
+		etat_local = etat_local_initial (window_size);
+		etat_global = { window_size = window_size; score = 0}
+	}
 
 
 
@@ -57,7 +57,7 @@ let etat_initial window_size =
 let supprimer_blocs (terrain : terrain) (l: brique list) =
 		List.fold_left (fun acc e -> 
 		List.filter_map (fun x -> if x = e then None else Some(x)) acc) 
-		terrain l;;
+		terrain l
 
 
 let dessiner_terrain (liste_blocs : terrain) =
@@ -77,7 +77,7 @@ let dessiner_raquette (raquette: raquette) = draw_rect raquette.position (raquet
 let avancer_balle (balle: balle) (etat: etat) : balle =
 	let (x, y) = balle.pos
 	in let (dx, dy) = balle.direction
-	in let (win_size_x, win_size_y) = etat.global_etat.window_size
+	in let (win_size_x, win_size_y) = etat.etat_global.window_size
 	in let (x, dx) =
 		(if x+.dx > (float_of_int win_size_x)-.balle_radius then
 			((float_of_int win_size_x)-.balle_radius, -.dx)
@@ -107,9 +107,9 @@ let deplacer_raquette ({ position = (x, y); _}) window_size gauche =
 (* modifie l'état en fonction des mouvements de la souris *)
 let gerer_entree_souris (etat: etat) x =
 	begin
-		let raquette = etat.local_etat.raquette
+		let raquette = etat.etat_local.raquette
 		in let (posx, _) = raquette.position
-		in let (win_size_x, _) = etat.global_etat.window_size
+		in let (win_size_x, _) = etat.etat_global.window_size
 		in let new_raquette =
 			(if x > posx+raquette_width then
 				deplacer_raquette raquette win_size_x false
@@ -117,7 +117,7 @@ let gerer_entree_souris (etat: etat) x =
 				deplacer_raquette raquette win_size_x true
 				else raquette)
 		in if new_raquette <> raquette then
-			{ etat with local_etat = { etat.local_etat with raquette = new_raquette} }
+			{ etat with etat_local = { etat.etat_local with raquette = new_raquette} }
 		else
 			etat
 	end
@@ -158,8 +158,8 @@ let faire_evoluer_balle (balle: balle) (raquette: raquette) (etat: etat) =
 let accelerer_balle ({pos = pos; direction = (dirx, diry)}: balle) =
 	{
 		pos = pos;
-		direction = (min (dirx*.1.0005) 5., min (diry*.1.0005) 5.)
-	};;
+		direction = (min (dirx*.1.0005) 4., min (diry*.1.0005) 4.)
+	}
 
 let rebond_brique balle (briques: brique list) = 
 	match briques with 
@@ -187,7 +187,7 @@ let rebond_brique balle (briques: brique list) =
 				}
 			(* à l'heure actuelle, les zones correspondants aux coins de la brique ne sont pas traitées... *)
 		else (* pas de rebond, on re change rien *)
-			balle;;
+			balle
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
@@ -203,7 +203,7 @@ let detecter_collisions () =
 				done;
 				let etat = GreenThreadsState.get ()
 				in begin
-				  let local_state = etat.local_etat in
+				  let local_state = etat.etat_local in
 					let balle = local_state.balle 
 					and terrain = local_state.terrain
 					and raquette = local_state.raquette 
@@ -212,15 +212,15 @@ let detecter_collisions () =
 					in let balle = rebond_brique (accelerer_balle (faire_evoluer_balle balle raquette etat)) blocs_collisionants
 					in let terrain = supprimer_blocs terrain blocs_collisionants
 					in let score = 
-					List.fold_left (+) etat.global_etat.score (List.map (fun (bloc:brique) -> 
+					List.fold_left (+) etat.etat_global.score (List.map (fun (bloc:brique) -> 
 						bloc.properties.value
 					) blocs_collisionants) 
 					 
 					in let new_state = 
-					{  local_etat =  
-							{etat.local_etat with terrain = terrain ; balle = balle};
-						global_etat = 
-							{etat.global_etat with score = score}
+					{  etat_local =  
+							{etat.etat_local with terrain = terrain ; balle = balle};
+						etat_global = 
+							{etat.etat_global with score = score}
 					}
 
 					in GreenThreadsState.send new_state
@@ -232,7 +232,7 @@ let detecter_fin_du_jeu () =
 	begin
 		while true do
 			let etat = GreenThreadsState.get ()
-			in let etat_local = etat.local_etat 
+			in let etat_local = etat.etat_local 
 			in let (_, y) = etat_local.balle.pos
 			in if y < 0. then
 				let nb_vies = etat_local.nb_vies
@@ -244,12 +244,14 @@ let detecter_fin_du_jeu () =
 					GreenThreadsState.stop_scheduler ()
 				else
 					(* réinitialisation du jeu avec mise à jour du nombre de parties restantes *)
-					let new_etat =  {
+					let new_etat = {
 						etat with
-						local_etat = {
-							(etat_local_initial etat.global_etat.window_size) with 
-							nb_vies = nb_vies - 1
-						} 
+						etat_local = {
+							(etat_local_initial etat.etat_global.window_size)
+							with
+								terrain = etat_local.terrain;
+								nb_vies = nb_vies - 1
+						}
 					}
 					in GreenThreadsState.send new_etat)
 			else
@@ -264,26 +266,27 @@ let dessiner_score score (w, h) =
 	moveto (w/50) (h/50);
 	set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
 	draw_string "Score : ";
-	draw_string (string_of_int score);;
+	draw_string (string_of_int score)
 
 let dessiner_nb_vies nb_vie (w, h) = 
-moveto (w - 150) (h/50);
-set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
-draw_string "# Vies : ";
-draw_string (string_of_int nb_vie);;
+	moveto (w - 150) (h/50);
+	set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
+	draw_string "# Vies : ";
+	draw_string (string_of_int nb_vie)
+
 (* Dessine les différents objets à l'écran *)
 let dessiner () =
 	begin
 		while true do
 			let etat  = (GreenThreadsState.get ()) 
-			in let etat_local = etat.local_etat 
+			in let etat_local = etat.etat_local 
 			in begin
 				clear_graph ();
 				dessiner_terrain etat_local.terrain;
 				dessiner_balle etat_local.balle;
 				dessiner_raquette etat_local.raquette;
-				dessiner_score etat.global_etat.score etat.global_etat.window_size;
-				dessiner_nb_vies etat.local_etat.nb_vies etat.global_etat.window_size;
+				dessiner_score etat.etat_global.score etat.etat_global.window_size;
+				dessiner_nb_vies etat.etat_local.nb_vies etat.etat_global.window_size;
 				synchronize ();
 			end;
 			GreenThreadsState.yield ();
@@ -295,7 +298,7 @@ let draw_string_centered text =
 	let w,h = text_size text in
 	let x, y = current_point () in 
 	moveto (x - w/2) (y- h/2);
-	draw_string text;; 
+	draw_string text
 
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =

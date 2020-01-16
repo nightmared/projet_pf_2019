@@ -25,7 +25,7 @@ let type_briques = [
   { color = blue; value= 100};
   { color = purple; value = 110};
   { color = yellow; value= 120};
-];;
+]
 
 let gen_brique x_idx y_idx _ height : brique =
 	{
@@ -33,10 +33,8 @@ let gen_brique x_idx y_idx _ height : brique =
 		height-((y_idx + 1) * brique_border + (y_idx-1) * brique_height));
 		lifetime = Int 1 ; 
 		properties = List.nth type_briques (Random.int (List.length type_briques))
-	};;
+	}
 
-(* TODO: ajouter de l'aléatoire là-dedans - c'est la raison d'être de l'utilisation
- * du type Option ici *)
 let gen_terrain width height =
 	(* solution entière de l'équation width =
 	 * (nb_briques_par_ligne+1)*brique_border+nb_briques_par_ligne*brique_width *)
@@ -49,21 +47,21 @@ let gen_terrain width height =
 		(List.flatten
 			(List.init nb_briques_par_ligne
 				(fun x_idx -> List.init nb_briques_par_colonne
-					(fun y_idx -> Some(gen_brique x_idx y_idx width height))
+					(fun y_idx -> if Random.int 5 <= 1 then Some(gen_brique x_idx y_idx width height) else None)
 				)
 			)
 		) in
-		liste_briques;;
+		liste_briques
 
 
-let etat_local_initial (size_win_x, size_win_y)  : local_etat =
+let etat_local_initial (size_win_x, size_win_y)  : etat_local =
 	let terrain = gen_terrain size_win_x size_win_y
 	in let balle = { 
 		pos = float_of_int (size_win_x/2), (float_of_int raquette_height)+.balle_radius ; 
-		direction = (4.5, 4.5)
+		direction = (2.5, 2.5)
 	}
 	in let raquette = { 
 			position = ((size_win_x-raquette_width)/2, 0) ;
 			vitesse_deplacement = (0., 0.)
 	}
-	in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3};;
+	in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3}

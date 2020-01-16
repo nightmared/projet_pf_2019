@@ -27,11 +27,11 @@ type balle = { pos: floating_position; direction : direction};;
 
 type raquette = { position: position; vitesse_deplacement: vitesse_deplacement};;
 
-type local_etat = { terrain : terrain ; balle : balle; raquette: raquette; nb_vies : int };;
+type etat_local = { terrain : terrain ; balle : balle; raquette: raquette; nb_vies : int };;
 
-type global_etat = { window_size : int * int; score : int};;
+type etat_global = { window_size : int * int; score : int};;
 
-type etat = {global_etat: global_etat; local_etat: local_etat;};;
+type etat = {etat_global: etat_global; etat_local: etat_local;};;
 
 
 (* Module d'ordonnancement coopératif des différentes tâches *)
