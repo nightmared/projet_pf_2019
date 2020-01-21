@@ -274,63 +274,6 @@ let detecter_collisions () =
 			end;
 	done; GreenThreadsState.exit ()
 
-let detecter_fin_du_jeu () =
-	begin
-		while true do
-			let etat = GreenThreadsState.get ()
-			in let etat_local = etat.etat_local 
-			in let (_, y) = etat_local.balle.pos
-			in if y < 0. then
-				let nb_vies = etat_local.nb_vies
-				in (if nb_vies = 1 then
-					(* l'utilisateur a perdu *)
-					(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
-					 * d'excéder la taille de la raquette, et donc de déclarer game over sans
-					 * raison *)
-					GreenThreadsState.stop_scheduler ()
-				else
-					(* réinitialisation du jeu avec mise à jour du nombre de parties restantes *)
-					let new_etat = {
-						etat with
-						etat_local = {
-							(etat_local_initial etat.etat_global.window_size)
-							with
-								terrain = etat_local.terrain;
-								nb_vies = nb_vies - 1
-						}
-					}
-					in GreenThreadsState.send new_etat)
-			else
-				GreenThreadsState.yield ();
-		done;
-		let etat = GreenThreadsState.get ()
-		in begin
-		  let local_state = etat.etat_local in
-			let balle = local_state.balle 
-			and terrain = local_state.terrain
-			and raquette = local_state.raquette 
-			(* détection et suppression des blocs sur le chemin de la balle *)
-			in let blocs_collisionants = collision balle terrain
-			in let balle = rebond_brique (accelerer_balle (faire_evoluer_balle balle raquette etat)) blocs_collisionants
-			in let terrain = supprimer_blocs terrain blocs_collisionants
-			in let score =
-			List.fold_left (+) etat.etat_global.score (List.map (fun (bloc:brique) ->
-				bloc.properties.value
-			) blocs_collisionants)
-
-			in let new_state =
-			{  etat_local =
-					{etat.etat_local with terrain = terrain ; balle = balle};
-				etat_global =
-					{etat.etat_global with score = score}
-			}
-
-			in begin
-				GreenThreadsState.send new_state;
-				GreenThreadsState.continue detecter_collisions
-			end
-		end;
-	end
 
 let rec detecter_fin_du_jeu () =
 	let etat = GreenThreadsState.get ()
@@ -405,6 +348,7 @@ let run () =
 	let win = open_graph " 640x480" in
 	let window_size = float_of_int (size_x win), float_of_int (size_y win) in
 	begin
+		auto_synchronize false;
 		GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial window_size);
 		clear_graph();
 		let w, h = int_of_float2 window_size in 
