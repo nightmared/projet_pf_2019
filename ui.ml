@@ -128,21 +128,14 @@ let gerer_entree_souris (etat: etat) x =
 	end
 
 (* Boucle évènementielle pour dessiner la raquette *)
-let boucle_evenementielle () =
-	try
-		begin
-			(* pour empécher les artifacts graphiques avec le double buffering *)
-			auto_synchronize false;
-			while true do
-				let st = wait_next_event [ Poll ]
-				in let etat = GreenThreadsState.get ()
-				in let new_etat = gerer_entree_souris etat st.mouse_x
-				in GreenThreadsState.send new_etat;
-				GreenThreadsState.yield ();
-			done;
-			GreenThreadsState.exit ()
-		end
-	with Exit -> GreenThreadsState.exit ()
+let rec boucle_evenementielle () =
+	let st = wait_next_event [ Poll ]
+	in let etat = GreenThreadsState.get ()
+	in let new_etat = gerer_entree_souris etat st.mouse_x
+	in begin
+		GreenThreadsState.send new_etat;
+		GreenThreadsState.continue boucle_evenementielle
+	end
 
 (* détecte une collision entre la balle et la raquette, et fait avancer la balle *)
 let faire_evoluer_balle (balle: balle) (raquette: raquette) (etat: etat) =
@@ -195,77 +188,79 @@ let rebond_brique balle (briques: brique list) =
 			balle
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
-let detecter_collisions () =
-	while true do
-		let start_time = Unix.gettimeofday () in
-			begin
-				(* Ce programme ne s'exécute que toutes les 16ms,
-				 * soit à une fréquence de 60Hz (fréquence de rafraichissement de l'écran).
-				 * Attention: le temps n'est malheureusement pas monotonique ici, on suppose
-				 * que ça ne posera pas trop de problèmes *)
-				while Unix.gettimeofday () -. start_time < 1./.60. do
-					GreenThreadsState.yield ();
-				done;
-				let etat = GreenThreadsState.get ()
-				in begin
-				  let local_state = etat.etat_local in
-					let balle = local_state.balle 
-					and terrain = local_state.terrain
-					and raquette = local_state.raquette 
-					(* détection et suppression des blocs sur le chemin de la balle *)
-					in let blocs_collisionants = collision balle terrain
-					in let balle = rebond_brique (accelerer_balle (faire_evoluer_balle balle raquette etat)) blocs_collisionants
-					in let terrain = supprimer_blocs terrain blocs_collisionants
-					in let score = 
-					List.fold_left (+) etat.etat_global.score (List.map (fun (bloc:brique) -> 
-						bloc.properties.value
-					) blocs_collisionants) 
-					 
-					in let new_state = 
-					{  etat_local =  
-							{etat.etat_local with terrain = terrain ; balle = balle};
-						etat_global = 
-							{etat.etat_global with score = score}
-					}
-
-					in GreenThreadsState.send new_state
-				end;
-			end;
-	done; GreenThreadsState.exit ()
-
-let detecter_fin_du_jeu () =
-	begin
-		while true do
-			let etat = GreenThreadsState.get ()
-			in let etat_local = etat.etat_local 
-			in let (_, y) = etat_local.balle.pos
-			in if y < 0. then
-				let nb_vies = etat_local.nb_vies
-				in (if nb_vies = 1 then
-					(* l'utilisateur a perdu *)
-					(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
-					 * d'excéder la taille de la raquette, et donc de déclarer game over sans
-					 * raison *)
-					GreenThreadsState.stop_scheduler ()
-				else
-					(* réinitialisation du jeu avec mise à jour du nombre de parties restantes *)
-					let new_etat = {
-						etat with
-						etat_local = {
-							(etat_local_initial etat.etat_global.window_size)
-							with
-								terrain = etat_local.terrain;
-								nb_vies = nb_vies - 1
-						}
-					}
-					in GreenThreadsState.send new_etat)
-			else
-				GreenThreadsState.yield ();
+let rec detecter_collisions () =
+	let start_time = Unix.gettimeofday ()
+	in begin
+		(* Ce programme ne s'exécute que toutes les 16ms,
+		 * soit à une fréquence de 60Hz (fréquence de rafraichissement de l'écran).
+		 * Attention: le temps n'est malheureusement pas monotonique ici, on suppose
+		 * que ça ne posera pas trop de problèmes *)
+		while Unix.gettimeofday () -. start_time < 1./.60. do
+			GreenThreadsState.yield ();
 		done;
-		(* la fonction 'exit' ne sera jamais exécutée mais est nécessaire pour que la fonction
-		 * soit valide du point de vue de son type *)
-		GreenThreadsState.exit ()
+		let etat = GreenThreadsState.get ()
+		in begin
+		  let local_state = etat.etat_local in
+			let balle = local_state.balle 
+			and terrain = local_state.terrain
+			and raquette = local_state.raquette 
+			(* détection et suppression des blocs sur le chemin de la balle *)
+			in let blocs_collisionants = collision balle terrain
+			in let balle = rebond_brique (accelerer_balle (faire_evoluer_balle balle raquette etat)) blocs_collisionants
+			in let terrain = supprimer_blocs terrain blocs_collisionants
+			in let score =
+			List.fold_left (+) etat.etat_global.score (List.map (fun (bloc:brique) ->
+				bloc.properties.value
+			) blocs_collisionants)
+
+			in let new_state =
+			{  etat_local =
+					{etat.etat_local with terrain = terrain ; balle = balle};
+				etat_global =
+					{etat.etat_global with score = score}
+			}
+
+			in begin
+				GreenThreadsState.send new_state;
+				GreenThreadsState.continue detecter_collisions
+			end
+		end;
 	end
+
+let rec detecter_fin_du_jeu () =
+	let etat = GreenThreadsState.get ()
+	in let etat_local = etat.etat_local 
+	in let (_, y) = etat_local.balle.pos
+	in if y < 0. then
+		let nb_vies = etat_local.nb_vies
+		in (if nb_vies = 1 then
+			(* l'utilisateur a perdu *)
+			(* TODO: mieux gérer les cas où la vitesse permet au vecteur direction
+			 * d'excéder la taille de la raquette, et donc de déclarer game over sans
+			 * raison *)
+			begin
+				GreenThreadsState.stop_scheduler ();
+				(* la fonction 'exit' ne sera jamais exécutée mais est nécessaire pour que la fonction
+				 * soit valide du point de vue de son type *)
+				GreenThreadsState.exit ()
+			end
+		else
+			(* réinitialisation du jeu avec mise à jour du nombre de parties restantes *)
+			let new_etat = {
+				etat with
+				etat_local = {
+					(etat_local_initial etat.etat_global.window_size)
+					with
+						terrain = etat_local.terrain;
+						nb_vies = nb_vies - 1
+				}
+			}
+			in begin
+				GreenThreadsState.send new_etat;
+				GreenThreadsState.continue detecter_fin_du_jeu
+			end)
+	else
+		GreenThreadsState.continue detecter_fin_du_jeu
 
 let dessiner_score score (w, h) = 
 	moveto (w/50) (h/50);
@@ -280,23 +275,18 @@ let dessiner_nb_vies nb_vie (w, h) =
 	draw_string (string_of_int nb_vie)
 
 (* Dessine les différents objets à l'écran *)
-let dessiner () =
-	begin
-		while true do
-			let etat  = (GreenThreadsState.get ()) 
-			in let etat_local = etat.etat_local 
-			in begin
-				clear_graph ();
-				dessiner_terrain etat_local.terrain;
-				dessiner_balle etat_local.balle;
-				dessiner_raquette etat_local.raquette;
-				dessiner_score etat.etat_global.score etat.etat_global.window_size;
-				dessiner_nb_vies etat.etat_local.nb_vies etat.etat_global.window_size;
-				synchronize ();
-			end;
-			GreenThreadsState.yield ();
-		done;
-		GreenThreadsState.exit ()
+let rec dessiner () =
+	let etat  = (GreenThreadsState.get ())
+	in let etat_local = etat.etat_local
+	in begin
+		clear_graph ();
+		dessiner_terrain etat_local.terrain;
+		dessiner_balle etat_local.balle;
+		dessiner_raquette etat_local.raquette;
+		dessiner_score etat.etat_global.score etat.etat_global.window_size;
+		dessiner_nb_vies etat.etat_local.nb_vies etat.etat_global.window_size;
+		synchronize ();
+		GreenThreadsState.continue dessiner;
 	end
 
 let draw_string_centered text = 
@@ -311,6 +301,8 @@ let run () =
 	in let size_win_x = size_x win
 	in let size_win_y = size_y win
 	in begin
+		(* pour empécher les artifacts graphiques avec le double buffering *)
+		auto_synchronize false;
 		GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial (size_win_x, size_win_y));
 		clear_graph();
 		moveto (size_win_x / 2) (size_win_y / 2);
