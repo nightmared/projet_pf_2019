@@ -25,6 +25,8 @@ module GreenThreads (M: sig type shift end) = struct
 	let yield () = Delimcc.shift p (fun k -> Yield (k))
 	let exit () = Delimcc.shift p (fun _ -> Exit)
 	let stop_scheduler () = Delimcc.shift p (fun _ -> StopScheduler)
+	(* Exécute une nouvelle méthode en lieu et place de la fonction qui vient de "yield" *)
+	let continue k = Delimcc.shift p (fun _ -> Yield (k))
 end
 
 (*
