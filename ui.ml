@@ -8,12 +8,6 @@ let raquette_fraction = 10.
 let draw_rect (x, y) (w, h) = draw_rect x y w h
 let fill_rect (x,y) (w, h) = fill_rect x y w h
 
-type collisionType = 
-	| HautDroite 
-	| HautGauche 
-	| BasDroite 
-	| BasGauche;;
-
 (* Un rectangle aligné avec les axes 
 	 Le rectangle est représenté par son coin bas gauche, 
 	 et sa longueur et largeur *)
@@ -31,22 +25,23 @@ type cercle = {
 };;
 
 
-(* Closest float to a range [a,b]
-	 *)
+(* Closest float to a range [a,b] *)
 let closest_float x a b = 
 	if x < a then a 
 	else if x > b then b 
 	else x;;
 
-(* A partir d'un point et d'un rectangle calcule
-	le point le point du rectangle le plus proche.
-	*)
-let closest_point_to_aabb (x,y) (aabb:aabb) = 
+(* Retourne le point du rectangle AABB le plus proche de (x,y) 
+	 Si (x,y) est à l'extérieur du rectangle alors le point est sur un côté du rectangle
+	 Sinon si il est à l'intérieur alors c'est lui même
+*)
+let projete_point_sur_aabb (x,y) (aabb:aabb) = 
 	let aabb_x, aabb_y = aabb.point in
 	let closest_x = closest_float x aabb_x (aabb_x +. aabb.width) 
 	and closest_y = closest_float y aabb_y (aabb_y +. aabb.height)
 	in (closest_x, closest_y);;
 
+(* Y a t-il collision entre un point et un cercle ? *)
 let collision_point_cercle point (cercle : cercle) = 
 	distance_carre point cercle.centre <= cercle.r*.cercle.r;;
 
@@ -54,8 +49,8 @@ let collision_point_cercle point (cercle : cercle) =
    Retourne une Option indiquant si il y a une collision et si 
 	 oui le point de collision, et un vecteur normal
 *)
-let collision_circle_aabb (circle:cercle) (aabb:aabb) = 
-	let closest_point = closest_point_to_aabb circle.centre aabb in 
+let collision_cercle_aabb (circle:cercle) (aabb:aabb) = 
+	let closest_point = projete_point_sur_aabb circle.centre aabb in 
 	if collision_point_cercle closest_point circle then 
 		let normale = circle.centre -$ closest_point in
 		Some (closest_point, (1./.sqrt(normale|$normale))*: normale)
@@ -81,15 +76,17 @@ let collision_rectangle_rectangle (r1: aabb) (r2: aabb) =
     || (r2_y +. r2.height <= r1_y));;
 
 
-(* 
-	Retourne une liste associative qui a chaque brique associe une option de collision
+(* Liste associative indiquant pour chaque brique si il y a collision avec la balle
+	Retourne une liste de pairs brique * collision option où
+  on associe associe à chaque brique soit
+		* None si il n'y a pas collision avec la balle
+    * Some collision si il y a une collision avec la balle
 *)
-
 let collisions (terrain : terrain)  balle: (brique * collision option) list=
 	List.map (fun (brique : brique) -> 
 		let aabb = { point= brique.position; width =brique_width; height =brique_height} and
 		 cercle = { centre = balle.pos; r = balle_radius} in
-		 (brique, collision_circle_aabb cercle aabb)
+		 (brique, collision_cercle_aabb cercle aabb)
 	) terrain;;
 
 let etat_initial window_size =
@@ -98,11 +95,13 @@ let etat_initial window_size =
 		etat_global = { window_size = window_size; score = 0}
 	}
 
+(* Retourne une brique dont la durée de vie a été réduit de un *)
 let abaisser_duree_de_vie brique =
 	match brique.lifetime with
 	| Infinity -> brique
 	| Int old_lifetime ->  { brique with lifetime = Int (old_lifetime - 1) };;
 
+(* Est ce que la brique n'a plus de point de vie ? *)
 let est_brique_morte brique = brique.lifetime = Int 0;;
 
 (* Abaisse la durée des blocs impliqué dans une collision *)
@@ -119,29 +118,26 @@ let dessiner_terrain (liste_blocs : terrain) =
 		fill_rect (int_of_float2 brique.position) (int_of_float2 (brique_width,brique_height));
 		set_color foreground;
 		draw_rect (int_of_float2 brique.position) (int_of_float2 (brique_width,brique_height));
-	) liste_blocs
+	) liste_blocs;;
 
 let dessiner_balle (balle: balle) =
 	let (x, y) = tuple_to_int (balle.pos)
-	in draw_circle x y (int_of_float balle_radius)
+	in draw_circle x y (int_of_float balle_radius);;
 
-let dessiner_raquette (raquette: raquette) = draw_rect (int_of_float2 raquette.position) (int_of_float2 (raquette_width, raquette_height))
+let dessiner_raquette (raquette: raquette) = 
+	draw_rect (int_of_float2 raquette.position) (int_of_float2 (raquette_width, raquette_height));;
 
-(* déplace la raquette si possible *)
+(* Déplace la raquette si possible *)
 let deplacer_raquette ({ position = (x, y); _}: raquette) window_width gauche =
 	let raquette_offset = raquette_offset /. raquette_fraction in 
 	if gauche then
-		{
-			position = (if x -. raquette_offset < 0. then (0., y) else (x-.raquette_offset, y));
-			vitesse_deplacement = (-.raquette_offset, 0.)
-		}
+		{ position = (if x -. raquette_offset < 0. then (0., y) else (x-.raquette_offset, y));
+			vitesse_deplacement = (-.raquette_offset, 0.) }
 	else
-		{
-			position = (if x +. raquette_offset >= window_width then (window_width-.raquette_width, y) else (x+.raquette_offset, y));
-			vitesse_deplacement = (raquette_offset, 0.)
-		}
+		{ position = (if x +. raquette_offset >= window_width then (window_width-.raquette_width, y) else (x+.raquette_offset, y));
+			vitesse_deplacement = (raquette_offset, 0.) }
 
-(* modifie l'état en fonction des mouvements de la souris *)
+(* Modifie l'état en fonction des mouvements de la souris *)
 let gerer_entree_souris (etat: etat) x =
 	begin
 		let raquette = etat.etat_local.raquette
@@ -169,31 +165,31 @@ let rec boucle_evenementielle () =
 		GreenThreadsState.continue boucle_evenementielle
 	end
 
-(* accélère légèrement la balle *)
-let accelerer_balle ({pos = pos; direction = (dirx, diry)}: balle) =
-	{
-		pos = pos;
-		direction = dirx*.(1.+.(0.01/.ffrequence)),  diry*.(1.+.(0.0001/.ffrequence))
-	}
+(* Accélère légèrement la balle *)
+let accelerer_balle (balle : balle) =
+	let dx, dy = balle.direction in
+	{	balle with 
+		direction = dx *. (1.+.(0.01/.ffrequence)),  dy *. (1.+.(0.0001/.ffrequence)) };;
+
+
 let avancer_balle (etat: etat) (balle: balle) : balle =
-	let (x, y) = balle.pos
-	in let (dx, dy) = balle.direction
-	in let (win_size_x, win_size_y) = etat.etat_global.window_size
-	in let (x, dx) =
+	let (x, y) = balle.pos in 
+	let (dx, dy) = balle.direction in
+	let (win_size_x, win_size_y) = etat.etat_global.window_size in 
+	let (x, dx) =
 		(if x+.dx > win_size_x-.balle_radius then
 			(win_size_x-.balle_radius, -.dx)
 		else if (int_of_float (x+.dx)) < 0 then
 			(balle_radius, -.dx)
 		else
-			(x+.dx, dx))
-	in let (y, dy) = (if y+.dy > win_size_y -.balle_radius then
+			(x+.dx, dx)) in 
+	let (y, dy) = (if y+.dy > win_size_y -.balle_radius then
 		( win_size_y -. balle_radius, -.dy)
 	else
 		(y+.dy, dy))
-	in  { pos = (x, y); direction = (dx, dy)}
+	in  { pos = (x, y); direction = (dx, dy)};;
 
 let print_balle {pos=(x,y);direction=(dx,dy)} = 
-	
 	print_string "Point (";print_float x; print_string " , "; print_float y; print_endline ")";
 	print_string "Vitesse (";print_float dx;  print_string " , "; print_float dy; print_endline ")";
 	print_newline ();;
@@ -202,19 +198,15 @@ let print_balle {pos=(x,y);direction=(dx,dy)} =
 let rebond_raquette(raquette: raquette) (balle: balle)  =	
 	let cercle = {centre = balle.pos ; r = balle_radius} 
 	and aabb = {point =raquette.position; width = raquette_width; height = raquette_height} in 
-	let collision = collision_circle_aabb cercle aabb in 
+	let collision = collision_cercle_aabb cercle aabb in 
+
 	match collision with 
 	| None -> balle
 	| Some(pt_contact,normale) -> 
-		(*print_endline "contact avec raquette";
-		print_balle balle;
-		print_string " normale :"; print_float (normale |$ normale); print_newline();*)
 		let new_direction = -. 2. *. (balle.direction |$ normale) *: normale +$ balle.direction +$ (1./.20.)*:raquette.vitesse_deplacement in
 		let dx, dy = new_direction in
 		if is_nan dx || is_nan dy then raise Division_by_zero;
 		let balle' = {pos = pt_contact+$ balle_radius*:normale; direction=new_direction} in 
-		(*print_endline "nouveau";
-		print_balle balle';*)
 		balle';;
 
 (* Détecte une collision entre la balle et les collisions données et renvoie la
@@ -224,7 +216,7 @@ let rebond_collisions (collisions: collision list) (balle: balle) : balle =
 	| [] -> balle
 	| (pt_contact, normale)::_ -> 
 		let new_direction = -. 2. *. (balle.direction |$ normale) *: normale +$ balle.direction in
-		{pos = pt_contact +$ balle_radius*:normale; direction = new_direction};;
+		{ pos = pt_contact +$ balle_radius*:normale; direction = new_direction};;
 
 let score briques score_ini = 
 	let briques_mortes = List.filter est_brique_morte briques in 
@@ -249,30 +241,34 @@ let detecter_collisions () =
 					let balle = local_state.balle 
 					and terrain = local_state.terrain
 					and raquette = local_state.raquette	in 
-					(* détection et suppression des blocs sur le chemin de la balle *)
-
+					(* fait avancer la balle *)
 					let balle' = balle |> avancer_balle etat in 
-
+					(* récupère le statut collision de chaque brique *)
 					let briques_collisions = collisions terrain balle' in
 					let collisions = List.filter_map (fun (_, collision) -> collision) briques_collisions in
+					(* fait rebondir la balle sur la raquette et les briques *)
 					let balle'' = balle'|> rebond_raquette raquette
 															|> rebond_collisions collisions in
 
 					let briques' = abaisser_duree_de_vie_briques briques_collisions in 
+					(* calcul du nouveau score *)
 					let score' = score briques' etat.etat_global.score in 
+					(* Suppression des briques dont la durée de vie est nulle *)
 					let terrain' = List.filter (fun b -> not (est_brique_morte b)) briques' in
 					 
-					let state' = 
-					{  etat_local =  
-							{etat.etat_local with terrain = terrain' ; balle = balle''};
-						etat_global = 
-							{etat.etat_global with score = score'}
-					}
-
-					in GreenThreadsState.send state'
+					let state' = {  
+						etat_local =  {
+							etat.etat_local with terrain = terrain' ; balle = balle''
+						};
+						etat_global = { 
+							etat.etat_global with score = score'
+						}
+					} in 
+					GreenThreadsState.send state'
 				end;
 			end;
-	done; GreenThreadsState.exit ()
+	done; 
+	GreenThreadsState.exit ();;
 
 
 let rec detecter_fin_du_jeu () =
