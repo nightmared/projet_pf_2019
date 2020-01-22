@@ -2,7 +2,7 @@ open Decl
 open Graphics
 
 
-let frequence = 120
+let frequence = 10000
 let ffrequence = float_of_int frequence
 let brique_width = 25.
 let brique_height = 15.

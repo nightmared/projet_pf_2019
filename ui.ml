@@ -124,18 +124,8 @@ let gerer_entree_souris (etat: etat) x =
       { etat with etat_local = { etat.etat_local with raquette = new_raquette} }
     else
       etat
-  end
+  end;;
 
-(* Boucle évènementielle pour dessiner la raquette *)
-let rec boucle_evenementielle () =
-  let st = wait_next_event [ Poll ]
-  in let etat = GreenThreadsState.get ()
-  in let new_etat = gerer_entree_souris etat (float_of_int st.mouse_x)
-  in
-    begin
-      GreenThreadsState.send new_etat;
-      GreenThreadsState.continue boucle_evenementielle
-    end
 
 (* Accélère légèrement la balle *)
 let accelerer_balle (balle : balle) =
@@ -169,13 +159,13 @@ let print_balle {pos=(x,y);direction=(dx,dy)} =
 (* Détecte une collision entre la balle et la raquette, et fait avancer la balle *)
 let rebond_raquette(raquette: raquette) (balle: balle)  =
   let cercle = {centre = balle.pos ; r = balle_radius}
-  and aabb = {point =raquette.position; width = raquette_width; height = raquette_height} in
+  and aabb = {point = raquette.position; width = raquette_width; height = raquette_height} in
   let collision = collision_cercle_aabb cercle aabb in
 
   match collision with
   | None -> balle
   | Some(pt_contact,normale) ->
-    let new_direction = -. 2. *. (balle.direction |$ normale) *: normale +$ balle.direction +$ (1./.20.)*:raquette.vitesse_deplacement in
+    let new_direction = -. 2. *. (balle.direction |$ normale) *: normale +$ balle.direction +$ (1./.1000.)*:raquette.vitesse_deplacement in
     let dx, dy = new_direction in
     let balle' = {pos = pt_contact+$ balle_radius*:normale; direction=new_direction} in 
     balle';;
@@ -206,16 +196,13 @@ let nb_vies nb_vies briques  =
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let rec detecter_collisions () =
- let start_time = Unix.gettimeofday () in begin
-  (* Ce programme ne s'exécute que toutes les 16ms,
-  * soit à une fréquence de 60Hz (fréquence de rafraichissement de l'écran).
-  * Attention: le temps n'est malheureusement pas monotonique ici, on suppose
-  * que ça ne posera pas trop de problèmes *)
+  let start_time = Unix.gettimeofday () in begin
   while Unix.gettimeofday () -. start_time < 1./. ffrequence do
     GreenThreadsState.yield ();
   done;
-  let etat = GreenThreadsState.get () in
-    let etat_local = etat.etat_local in
+  let st =  wait_next_event [ Poll ] in
+  let etat = gerer_entree_souris (GreenThreadsState.get()) (float_of_int st.mouse_x) in
+  let etat_local = etat.etat_local in
     let balle = etat_local.balle 
     and terrain = etat_local.terrain
     and raquette = etat_local.raquette	in 
@@ -250,7 +237,7 @@ let rec detecter_collisions () =
       GreenThreadsState.send state';
       GreenThreadsState.continue detecter_collisions
     end
- end
+  end;;
 
 
 let rec detecter_fin_du_jeu () =
@@ -290,19 +277,24 @@ let rec detecter_fin_du_jeu () =
 
 (* Dessine les différents objets à l'écran *)
 let rec dessiner () =
-  let etat  = (GreenThreadsState.get ())
-  in let etat_local = etat.etat_local
-  in begin
-    clear_graph ();
-    dessiner_terrain etat_local.terrain;
-    dessiner_balle etat_local.balle;
-    dessiner_raquette etat_local.raquette;
-    dessiner_score etat.etat_global.score etat.etat_global.window_size;
-    dessiner_nb_vies etat.etat_local.nb_vies etat.etat_global.window_size;
-    synchronize ();
-    GreenThreadsState.continue dessiner;
-  end
+  let start_time = Unix.gettimeofday () in begin
+    while Unix.gettimeofday () -. start_time < 1./. 60. do
+      GreenThreadsState.yield ();
+    done;
 
+    let etat  = (GreenThreadsState.get ())
+    in let etat_local = etat.etat_local
+    in begin
+      clear_graph ();
+      dessiner_terrain etat_local.terrain;
+      dessiner_balle etat_local.balle;
+      dessiner_raquette etat_local.raquette;
+      dessiner_score etat.etat_global.score etat.etat_global.window_size;
+      dessiner_nb_vies etat.etat_local.nb_vies etat.etat_global.window_size;
+      synchronize ();
+      GreenThreadsState.continue dessiner;
+    end
+  end;;
 
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
@@ -310,11 +302,12 @@ let run () =
   let window_size = float_of_int (size_x win), float_of_int (size_y win) in
   begin
     auto_synchronize false;
-    GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial window_size);
+    GreenThreadsState.scheduler [detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial window_size);
     clear_graph();
     let w, h = int_of_float2 window_size in 
     moveto (w / 2, h / 2);
     set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
     draw_string_centered "Game over!";
+    print_endline "end";
     synchronize ();
   end
