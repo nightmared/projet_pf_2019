@@ -31,43 +31,43 @@ let type_briques = [
 ]
 
 let gen_brique x_idx y_idx _ height : brique =
-	let x_idx = float_of_int x_idx in 
-	let y_idx = float_of_int y_idx in
-	let lifetime = Random.int (List.length type_briques)
-	in {
-		position = (((x_idx +. 1.) *. brique_border +. (x_idx) *. brique_width),
-		height-.((y_idx +. 1.) *. brique_border +. (y_idx-.1.) *. brique_height));
-		lifetime = if lifetime = 0 then Infinity else Int (lifetime/3);
-		properties = List.nth type_briques lifetime
-	}
+  let x_idx = float_of_int x_idx in 
+  let y_idx = float_of_int y_idx in
+  let lifetime = Random.int (List.length type_briques)
+  in {
+    position = (((x_idx +. 1.) *. brique_border +. (x_idx) *. brique_width),
+    height-.((y_idx +. 1.) *. brique_border +. (y_idx-.1.) *. brique_height));
+    lifetime = if lifetime = 0 then Infinity else Int (lifetime/3);
+    properties = List.nth type_briques lifetime
+  }
 
 let gen_terrain width height =
-	(* solution entière de l'équation width =
-	 * (nb_briques_par_ligne+1)*brique_border+nb_briques_par_ligne*brique_width *)
-	let nb_briques_par_ligne = int_of_float ((width-.brique_border)/.(brique_border+.brique_width))
-	(* on réserve quelques lignes en bas pour que le jeu soit jouable *)
-	in let nb_briques_par_colonne = int_of_float ((height-.brique_border)/.(brique_border+.brique_height) -. 6.)
-	(* on conserve uniquement les éléments non nuls *)
-	in let liste_briques = List.filter_map
-		(fun x -> x)
-		(List.flatten
-			(List.init nb_briques_par_ligne
-				(fun x_idx -> List.init nb_briques_par_colonne
-					(fun y_idx -> if Random.int 5 <= 1 then Some(gen_brique x_idx y_idx width height) else None)
-				)
-			)
-		) in
-		liste_briques
+  (* solution entière de l'équation width =
+   * (nb_briques_par_ligne+1)*brique_border+nb_briques_par_ligne*brique_width *)
+  let nb_briques_par_ligne = int_of_float ((width-.brique_border)/.(brique_border+.brique_width))
+  (* on réserve quelques lignes en bas pour que le jeu soit jouable *)
+  in let nb_briques_par_colonne = int_of_float ((height-.brique_border)/.(brique_border+.brique_height) -. 6.)
+  (* on conserve uniquement les éléments non nuls *)
+  in let liste_briques = List.filter_map
+    (fun x -> x)
+    (List.flatten
+      (List.init nb_briques_par_ligne
+        (fun x_idx -> List.init nb_briques_par_colonne
+          (fun y_idx -> if Random.int 5 <= 1 then Some(gen_brique x_idx y_idx width height) else None)
+        )
+      )
+    ) in
+    liste_briques
 
 
 let etat_local_initial (size_win_x, size_win_y)  : etat_local =
-	let terrain = gen_terrain size_win_x size_win_y
-	in let balle = { 
-		pos = size_win_x/.2., raquette_height +. balle_radius ; 
-		direction = (150./.ffrequence, 150./.ffrequence)
-	}
-	in let raquette = { 
-			position = (size_win_x -.raquette_width) /. 2., 0. ;
-			vitesse_deplacement = (0., 0.)
-	}
-	in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3}
+  let terrain = gen_terrain size_win_x size_win_y
+  in let balle = { 
+    pos = size_win_x/.2., raquette_height +. balle_radius ; 
+    direction = (150./.ffrequence, 150./.ffrequence)
+  }
+  in let raquette = { 
+      position = (size_win_x -.raquette_width) /. 2., 0. ;
+      vitesse_deplacement = (0., 0.)
+  }
+  in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3}
