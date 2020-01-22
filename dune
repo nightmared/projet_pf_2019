@@ -1,10 +1,8 @@
 (env
   (dev
-    (flags (:standard -warn-error -A))))
+    (flags (:standard -warn-error -A -g))))
 
-(library
+(executable
  (name projet)
- (libraries graphics delimcc)
- (inline_tests)
- (preprocess
-  (pps ppx_inline_test)))
+ (libraries unix graphics delimcc)
+ )

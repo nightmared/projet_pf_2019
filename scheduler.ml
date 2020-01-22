@@ -25,21 +25,6 @@ module GreenThreads (M: sig type shift end) = struct
   let yield () = Delimcc.shift p (fun k -> Yield (k))
   let exit () = Delimcc.shift p (fun _ -> Exit)
   let stop_scheduler () = Delimcc.shift p (fun _ -> StopScheduler)
-  (* Exécute une nouvelle méthode en lieu et place de la fonction qui vient de "yield" *)
+  (* Exécute une nouvelle méthode qui remplace la fonction qui vient de "yield" *)
   let continue k = Delimcc.shift p (fun _ -> Yield (k))
 end
-
-(*
-* module GreenThreadsBool = GreenThreads (struct type shift = terrain end)
-*
-* let sendmsg msg = begin
-* 	for i = 1 to 10 do
-* 		let t = GreenThreadsBool.get () in
-* 		let _ = List.iter (fun (Brique ((x, y), _, _)) -> print_endline (msg^" "^(string_of_int x)^" "^(string_of_int y))) t in
-* 		GreenThreadsBool.send (Ui.gen_brique 1 4 640 480::t);
-* 		GreenThreadsBool.yield ();
-* 	done;
-* 	end
-*
-* GreenThreadsBool.scheduler [(fun () -> sendmsg "ping"; GreenThreadsBool.exit ()); (fun () -> sendmsg "pong"; GreenThreadsBool.exit ())] [];
-*)
