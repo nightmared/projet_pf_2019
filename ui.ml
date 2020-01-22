@@ -1,28 +1,12 @@
 open Graphics
+open Drawing
 open Plateau
 open Decl
 open Float
 
 let raquette_fraction = 10.
 
-let draw_rect (x, y) (w, h) = draw_rect x y w h
-let fill_rect (x,y) (w, h) = fill_rect x y w h
-
-(* Un rectangle aligné avec les axes 
-   Le rectangle est représenté par son coin bas gauche, 
-   et sa longueur et largeur *)
-type aabb = {
-  point : float*float;
-  width : float;
-  height: float
-};;
-
-(* Un cercle est représenté par les coordonnées de son centre 
-  et son rayon *)
-type cercle = {
-  centre : float*float;
-  r : float
-};;
+exception Collision_ingerable of cercle * aabb
 
 
 (* Closest float to a range [a,b] *)
@@ -53,6 +37,8 @@ let collision_cercle_aabb (circle:cercle) (aabb:aabb) =
   let closest_point = projete_point_sur_aabb circle.centre aabb in 
   if collision_point_cercle closest_point circle then 
     let normale = circle.centre -$ closest_point in
+    if (normale |$ normale) = 0.0 then raise (Collision_ingerable (circle,aabb))
+    else
     Some (closest_point, (1./.sqrt(normale|$normale))*: normale)
   else 
     None;;
@@ -84,7 +70,7 @@ let collision_rectangle_rectangle (r1: aabb) (r2: aabb) =
 *)
 let collisions (terrain : terrain)  balle: (brique * collision option) list=
   List.map (fun (brique : brique) -> 
-    let aabb = { point= brique.position; width =brique_width; height =brique_height} and
+    let aabb = brique |> brique_to_aabb  and
      cercle = { centre = balle.pos; r = balle_radius} in
      (brique, collision_cercle_aabb cercle aabb)
   ) terrain;;
@@ -111,21 +97,6 @@ let abaisser_duree_de_vie_briques (briques_collisions: (brique * collision optio
     | None -> brique
     | Some _ -> abaisser_duree_de_vie brique)
   ) briques_collisions;;
-
-let dessiner_terrain (liste_blocs : terrain) =
-  List.iter (fun (brique : brique) ->
-    set_color brique.properties.color;
-    fill_rect (int_of_float2 brique.position) (int_of_float2 (brique_width,brique_height));
-    set_color foreground;
-    draw_rect (int_of_float2 brique.position) (int_of_float2 (brique_width,brique_height));
-  ) liste_blocs;;
-
-let dessiner_balle (balle: balle) =
-  let (x, y) = tuple_to_int (balle.pos)
-  in draw_circle x y (int_of_float balle_radius);;
-
-let dessiner_raquette (raquette: raquette) = 
-  draw_rect (int_of_float2 raquette.position) (int_of_float2 (raquette_width, raquette_height));;
 
 (* Déplace la raquette si possible *)
 let deplacer_raquette ({ position = (x, y); _}: raquette) window_width gauche =
@@ -169,7 +140,7 @@ let rec boucle_evenementielle () =
 let accelerer_balle (balle : balle) =
   let dx, dy = balle.direction in
   {	balle with 
-    direction = dx *. (1.+.(0.01/.ffrequence)),  dy *. (1.+.(0.0001/.ffrequence)) };;
+    direction = dx *. (1.+.(1./.ffrequence)),  dy *. (1.+.(1./.ffrequence)) };;
 
 
 let avancer_balle (etat: etat) (balle: balle) : balle =
@@ -205,7 +176,6 @@ let rebond_raquette(raquette: raquette) (balle: balle)  =
   | Some(pt_contact,normale) -> 
     let new_direction = -. 2. *. (balle.direction |$ normale) *: normale +$ balle.direction +$ (1./.20.)*:raquette.vitesse_deplacement in
     let dx, dy = new_direction in
-    if is_nan dx || is_nan dy then raise Division_by_zero;
     let balle' = {pos = pt_contact+$ balle_radius*:normale; direction=new_direction} in 
     balle';;
 
@@ -223,6 +193,16 @@ let score briques score_ini =
   let valeurs = List.map (fun brique -> brique.properties.value) briques_mortes in 
   List.fold_left (+) score_ini valeurs;;
 
+
+
+let nb_vies nb_vies briques  = 
+  let a_bonus_one_more_life = fun (b : brique) -> (b.properties.bonus = Some OneMoreLife) in
+  let briques_mortes = List.filter (fun brique -> 
+    est_brique_morte brique && a_bonus_one_more_life brique
+  ) briques in
+  nb_vies + List.length briques_mortes;; 
+
+
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
   while true do
@@ -237,10 +217,10 @@ let detecter_collisions () =
         done;
         let etat = GreenThreadsState.get ()
         in begin
-          let local_state = etat.etat_local in
-          let balle = local_state.balle 
-          and terrain = local_state.terrain
-          and raquette = local_state.raquette	in 
+          let etat_local = etat.etat_local in
+          let balle = etat_local.balle 
+          and terrain = etat_local.terrain
+          and raquette = etat_local.raquette	in 
           (* fait avancer la balle *)
           let balle' = balle |> avancer_balle etat in 
           (* récupère le statut collision de chaque brique *)
@@ -253,12 +233,16 @@ let detecter_collisions () =
           let briques' = abaisser_duree_de_vie_briques briques_collisions in 
           (* calcul du nouveau score *)
           let score' = score briques' etat.etat_global.score in 
+          let nb_vies' = nb_vies etat_local.nb_vies briques' in 
           (* Suppression des briques dont la durée de vie est nulle *)
           let terrain' = List.filter (fun b -> not (est_brique_morte b)) briques' in
            
           let state' = {  
             etat_local =  {
-              etat.etat_local with terrain = terrain' ; balle = balle''
+              etat.etat_local with 
+              terrain = terrain'; 
+              balle = balle'';
+              nb_vies = nb_vies'
             };
             etat_global = { 
               etat.etat_global with score = score'
@@ -306,18 +290,6 @@ let rec detecter_fin_du_jeu () =
   else
     GreenThreadsState.continue detecter_fin_du_jeu
 
-let dessiner_score score (w, h) = 
-  moveto ((int_of_float w)/50) ((int_of_float h)/50);
-  set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
-  draw_string "Score : ";
-  draw_string (string_of_int score)
-
-let dessiner_nb_vies nb_vie (w, h) = 
-  moveto ((int_of_float w) - 150) ((int_of_float h)/50);
-  set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
-  draw_string "# Vies : ";
-  draw_string (string_of_int nb_vie)
-
 (* Dessine les différents objets à l'écran *)
 let rec dessiner () =
   let etat  = (GreenThreadsState.get ())
@@ -333,11 +305,7 @@ let rec dessiner () =
     GreenThreadsState.continue dessiner;
   end
 
-let draw_string_centered text = 
-  let w,h = text_size text in
-  let x, y = current_point () in 
-  moveto (x - w/2) (y- h/2);
-  draw_string text
+
 
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
@@ -348,7 +316,7 @@ let run () =
     GreenThreadsState.scheduler [boucle_evenementielle; detecter_collisions; detecter_fin_du_jeu; dessiner] (etat_initial window_size);
     clear_graph();
     let w, h = int_of_float2 window_size in 
-    moveto (w / 2) (h / 2);
+    moveto (w / 2, h / 2);
     set_font "-*-fixed-medium-r-semicondensed--25-*-*-*-*-*-iso8859-1";
     draw_string_centered "Game over!";
     synchronize ();

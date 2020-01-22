@@ -2,7 +2,8 @@ open Scheduler
 open Graphics
 
 type integer = | Int of int | Infinity;;
-type properties = {color: color; value: int}
+type bonus = OneMoreLife;;
+type properties = {color: color; value: int; bonus: bonus option}
 
 
 type position = int * int
@@ -54,7 +55,23 @@ let ( -$ ) (x, y) (x', y') = (x-.x', y-.y');;
 let ( *: ) a (x,y) = (a*.x, a*.y);;
 let distance_carre p1 p2 = let x = p2 -$ p1 in (x |$ x);;
 
-let tuple_to_float (x, y) = (float_of_int x, float_of_int y)
-let tuple_to_int (x, y) = (int_of_float x, int_of_float y)
+
 let int_of_float2 (x,y) = int_of_float x, int_of_float y;;
 let float_of_int2 (x,y) = float_of_int x, float_of_int y;;
+
+(* Un rectangle aligné avec les axes 
+   Le rectangle est représenté par son coin bas gauche, 
+   et sa longueur et largeur *)
+type aabb = {
+  point : float*float;
+  width : float;
+  height: float
+};;
+
+(* Un cercle est représenté par les coordonnées de son centre 
+  et son rayon *)
+type cercle = {
+  centre : float*float;
+  r : float
+};;
+

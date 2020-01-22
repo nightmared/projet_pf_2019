@@ -2,7 +2,7 @@ open Decl
 open Graphics
 
 
-let frequence = 60*4
+let frequence = 120
 let ffrequence = float_of_int frequence
 let brique_width = 25.
 let brique_height = 15.
@@ -19,8 +19,10 @@ let balle_radius = 6.120
 let orange = rgb 255 140 0;;
 let purple = rgb 100 0 170;;
 
+type type_brique = {color : color; value : int};;
+
 let type_briques = [
-  { color = white; value = 50};
+  { color = white; value = 50;};
   { color = orange; value= 60};
   { color = cyan ; value = 70};
   { color = green; value = 80};
@@ -33,13 +35,14 @@ let type_briques = [
 let gen_brique x_idx y_idx _ height : brique =
   let x_idx = float_of_int x_idx in 
   let y_idx = float_of_int y_idx in
-  let lifetime = Random.int (List.length type_briques)
-  in {
+  let lifetime = Random.int (List.length type_briques) in
+  let est_bonus =  Random.float 1. < 0.05  in
+  let type_brique = List.nth type_briques lifetime in {
     position = (((x_idx +. 1.) *. brique_border +. (x_idx) *. brique_width),
     height-.((y_idx +. 1.) *. brique_border +. (y_idx-.1.) *. brique_height));
     lifetime = if lifetime = 0 then Infinity else Int (lifetime/3);
-    properties = List.nth type_briques lifetime
-  }
+    properties = { color = type_brique.color; value = type_brique.value; bonus = if est_bonus then Some OneMoreLife else None}
+  };;
 
 let gen_terrain width height =
   (* solution entière de l'équation width =
@@ -71,3 +74,7 @@ let etat_local_initial (size_win_x, size_win_y)  : etat_local =
       vitesse_deplacement = (0., 0.)
   }
   in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3}
+
+let brique_to_aabb (brique : brique) = { point= brique.position; width =brique_width; height =brique_height};;
+let centre_rectangle (r : aabb) = 
+  r.point +$ (1./.2.) *: (r.width, r.height)
