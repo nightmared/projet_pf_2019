@@ -8,13 +8,13 @@ let brique_width = 25.
 let brique_height = 15.
 let brique_border = 10.
 
-let raquette_width = 640.
+let raquette_width = 35.
 let raquette_height = 15.
 (* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
 let raquette_offset = 10.
 
 let balle_radius = 6.120
-let balle_initiale_speed = 7500.
+let balle_initiale_speed = 300.
 
 
 let orange = rgb 255 140 0;;
