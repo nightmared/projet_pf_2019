@@ -8,19 +8,23 @@ let brique_width = 25.
 let brique_height = 15.
 let brique_border = 10.
 
-let raquette_width = 35.
+let raquette_width = 640.
 let raquette_height = 15.
 (* qtté de déplacement de la raquette lors d'une entrée utilisateur *)
 let raquette_offset = 10.
 
 let balle_radius = 6.120
-let balle_initiale_speed = 300.
+let balle_initiale_speed = 7500.
 
 
 let orange = rgb 255 140 0;;
 let purple = rgb 100 0 170;;
 
+(* Nombre de bonus différents à prendre en compte *)
 let nb_type_bonus = 5;;
+
+(* durabilité maximale des briques *)
+let vie_max_brique = 3;;
 
 type type_brique = {color : color; value : int};;
 
@@ -41,7 +45,7 @@ let type_briques = [
 let gen_brique x_idx y_idx _ height : brique =
   let x_idx = float_of_int x_idx in 
   let y_idx = float_of_int y_idx in
-  let lifetime = Random.int (List.length type_briques) in
+  let lifetime = Random.int (vie_max_brique+1) in
   let est_bonus =  Random.float 1. < 0.05  in
   let bonus = if est_bonus then (Random.int nb_type_bonus) + 1 else 0 in
   let type_brique = List.nth type_briques lifetime in {
@@ -56,7 +60,7 @@ let gen_brique x_idx y_idx _ height : brique =
                                                                                       | 5 -> Some SizeDown
                                                                                       | _ -> None
                                                                                       else None };
-    lifetime = if lifetime = 0 then Infinity else Int (lifetime/3 + 1)
+    lifetime = if lifetime = 0 then Infinity else Int (lifetime)
   };;
 
 (* Génère l'état initiale du terrain à partir de ses dimensions *)

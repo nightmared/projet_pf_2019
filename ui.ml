@@ -90,11 +90,15 @@ let etat_initial window_size =
     etat_global = { window_size = window_size; score = 0}
   }
 
+(* Change la couleur de la brique pour refléter sa durée de vie *)
+let update_color brique' lifetime =
+  { brique' with properties = {brique'.properties with color = (List.nth Plateau.type_briques (lifetime-1)).color}}
+
 (* Retourne une brique dont la durée de vie a été réduit de un *)
 let abaisser_duree_de_vie brique =
   match brique.lifetime with
   | Infinity -> brique
-  | Int old_lifetime ->  { brique with lifetime = Int (old_lifetime - 1) };;
+  | Int old_lifetime -> update_color { brique with lifetime = Int (old_lifetime - 1) } (old_lifetime);;
 
 (* Est ce que la brique n'a plus de point de vie ? *)
 let est_brique_morte brique = brique.lifetime = Int 0;;
