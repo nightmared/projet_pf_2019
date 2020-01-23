@@ -100,14 +100,16 @@ let abaisser_duree_de_vie_briques (briques_collisions: (brique * collision optio
   ) briques_collisions;;
 
 (* Déplace la raquette si possible *)
-let deplacer_raquette ({ position = (x, y); _}: raquette) window_width gauche =
+let deplacer_raquette ({ position = (x, y); vitesse_deplacement = _; width = wid}: raquette) window_width gauche =
   let raquette_offset = raquette_offset /. raquette_fraction in
   if gauche then
     { position = (if x -. raquette_offset < 0. then (0., y) else (x-.raquette_offset, y));
-      vitesse_deplacement = (-.raquette_offset, 0.) }
+      vitesse_deplacement = (-.raquette_offset, 0.);
+      width = wid}
   else
     { position = (if x +. raquette_offset >= window_width then (window_width-.raquette_width, y) else (x+.raquette_offset, y));
-      vitesse_deplacement = (raquette_offset, 0.) }
+      vitesse_deplacement = (raquette_offset, 0.);
+      width = wid}
 
 (* Modifie l'état en fonction des mouvements de la souris *)
 let gerer_entree_souris (etat: etat) x =
@@ -162,7 +164,7 @@ let print_balle {pos=(x,y);direction=(dx,dy)} =
 (* Détecte une collision entre la balle et la raquette, et fait avancer la balle *)
 let rebond_raquette(raquette: raquette) (balle: balle)  =
   let cercle = {centre = balle.pos ; r = balle_radius}
-  and aabb = {point = raquette.position; width = raquette_width; height = raquette_height} in
+  and aabb = {point = raquette.position; width = raquette.width; height = raquette_height} in
   let collision = collision_cercle_aabb cercle aabb in
 
   match collision with
@@ -193,7 +195,39 @@ let nb_vies nb_vies briques  =
   let briques_mortes = List.filter (fun brique -> 
     est_brique_morte brique && a_bonus_one_more_life brique
   ) briques in
-  nb_vies + List.length briques_mortes;; 
+  nb_vies + List.length briques_mortes;;
+
+(* Retroune la balle après prise en compte des bonus affectant sa vitesse *)
+let bonus_vitesse briques balle =
+  let bonus_accel = fun (b : brique) -> (b.properties.bonus = Some SpeedUp) in
+  let bonus_decel = fun (b : brique) -> (b.properties.bonus = Some SpeedDown) in
+  let briques_accel = List.filter (fun brique -> 
+    est_brique_morte brique && bonus_accel brique
+  ) briques in
+  let briques_decel = List.filter (fun brique ->
+    est_brique_morte brique && bonus_decel brique
+  ) briques in
+  let accel = if (List.length briques_accel) = 0 then 1. else 1.5**(float_of_int (List.length briques_accel)) in
+  let decel = if (List.length briques_decel) = 0 then 1. else 0.66**(float_of_int (List.length briques_decel)) in
+  let new_direction = (accel*.decel) *: balle.direction in
+  {pos = balle.pos; direction = new_direction}
+
+(* Retourne la raquette après prise en compte des bonus affectant sa taille *)
+let bonus_raquette (raquette:raquette) briques =
+  let bonus_sizeup = fun (b : brique) -> (b.properties.bonus = Some SizeUp) in
+  let bonus_sizedown = fun (b : brique) -> (b.properties.bonus = Some SizeDown) in
+  let briques_sizeup = List.filter (fun brique ->
+    est_brique_morte brique && bonus_sizeup brique
+    ) briques in
+  let briques_sizedown = List.filter (fun brique ->
+    est_brique_morte brique && bonus_sizedown brique
+    ) briques in
+  let sizeup = if (List.length briques_sizeup) = 0 then 1. else 1.5**(float_of_int (List.length briques_sizeup)) in
+  let sizedown = if (List.length briques_sizedown) = 0 then 1. else 0.75**(float_of_int (List.length briques_sizedown)) in
+  let new_width = raquette.width *. sizeup *. sizedown in
+  {position = raquette.position; vitesse_deplacement = raquette.vitesse_deplacement; width = new_width}
+  
+
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
@@ -215,15 +249,21 @@ let detecter_collisions () =
   let briques' = abaisser_duree_de_vie_briques briques_collisions in 
   (* calcul du nouveau score *)
   let score' = score briques' etat.etat_global.score in 
-  let nb_vies' = nb_vies etat_local.nb_vies briques' in 
+  (* ajout d'une vie au joueur si un bonus +1 vie était dans une brique détruite *)
+  let nb_vies' = nb_vies etat_local.nb_vies briques' in
+  (* accelération/ déceleration de la balle en fonction des bonus *)
+  let balle''' = balle'' |> bonus_vitesse briques' in
   (* Suppression des briques dont la durée de vie est nulle *)
   let terrain' = List.filter (fun b -> not (est_brique_morte b)) briques' in
+  (* Modification de la taille de la raquette en fonction des bonus *)
+  let raquette' = bonus_raquette etat_local.raquette briques' in
     
   let state' = {  
     etat_local =  {
       etat.etat_local with 
       terrain = terrain'; 
-      balle = balle'';
+      balle = balle''';
+      raquette = raquette';
       nb_vies = nb_vies'
     };
     etat_global = { 

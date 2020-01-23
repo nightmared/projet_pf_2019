@@ -27,6 +27,30 @@ let dessiner_terrain (liste_blocs : terrain) =
         set_font "-*-fixed-medium-r-semicondensed--15-*-*-*-*-*-iso8859-1";
         draw_string_centered "+1";
       end
+    | Some SpeedUp -> 
+      begin
+        set_color black;
+        set_font "-*-fixed-medium-r-semicondensed--15-*-*-*-*-*-iso8859-1";
+        draw_string_centered "S+";
+      end
+    | Some SpeedDown -> 
+      begin
+        set_color black;
+        set_font "-*-fixed-medium-r-semicondensed--15-*-*-*-*-*-iso8859-1";
+        draw_string_centered "S-";
+      end
+    | Some SizeUp ->
+      begin
+        set_color black;
+        set_font "-*-fixed-medium-r-semicondensed--15-*-*-*-*-*-iso8859-1";
+        draw_string_centered "L+";
+      end
+    | Some SizeDown ->
+    begin
+        set_color black;
+        set_font "-*-fixed-medium-r-semicondensed--15-*-*-*-*-*-iso8859-1";
+        draw_string_centered "L-";
+      end
     );
     set_color foreground;
     draw_rect (int_of_float2 brique.position) (int_of_float2 (brique_width,brique_height));
@@ -39,7 +63,7 @@ let dessiner_balle (balle: balle) =
 
 (* Dessine l'état actuel de la raquette à l'écran *)
 let dessiner_raquette (raquette: raquette) = 
-  draw_rect (int_of_float2 raquette.position) (int_of_float2 (raquette_width, raquette_height));;
+  draw_rect (int_of_float2 raquette.position) (int_of_float2 (raquette.width, raquette_height));;
 
 (* Affiche le score actuel à l'écran *)
 let dessiner_score score (w, h) = 

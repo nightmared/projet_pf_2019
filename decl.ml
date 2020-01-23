@@ -2,7 +2,7 @@ open Scheduler
 open Graphics
 
 type integer = | Int of int | Infinity;;
-type bonus = OneMoreLife;;
+type bonus = OneMoreLife | SpeedUp | SpeedDown | SizeUp | SizeDown;;
 type properties = {color: color; value: int; bonus: bonus option}
 
 
@@ -27,7 +27,7 @@ type terrain = brique list
 
 type balle = { pos: floating_position; direction : direction};;
 
-type raquette = { position: floating_position; vitesse_deplacement: vitesse_deplacement};;
+type raquette = { position: floating_position; vitesse_deplacement: vitesse_deplacement; width: float};;
 
 (* Etat du terrain, de la balle, de la raquette et du nombre de vies du joueur *)
 type etat_local = { terrain : terrain ; balle : balle; raquette: raquette; nb_vies : int };;

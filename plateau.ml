@@ -14,11 +14,13 @@ let raquette_height = 15.
 let raquette_offset = 10.
 
 let balle_radius = 6.120
-let balle_initiale_speed = 150.
+let balle_initiale_speed = 300.
 
 
 let orange = rgb 255 140 0;;
 let purple = rgb 100 0 170;;
+
+let nb_type_bonus = 5;;
 
 type type_brique = {color : color; value : int};;
 
@@ -41,10 +43,19 @@ let gen_brique x_idx y_idx _ height : brique =
   let y_idx = float_of_int y_idx in
   let lifetime = Random.int (List.length type_briques) in
   let est_bonus =  Random.float 1. < 0.05  in
+  let bonus = if est_bonus then (Random.int nb_type_bonus) + 1 else 0 in
   let type_brique = List.nth type_briques lifetime in {
     position = (((x_idx +. 1.) *. brique_border +. (x_idx) *. brique_width),
     height-.((y_idx +. 1.) *. brique_border +. (y_idx-.1.) *. brique_height));
-    properties = { color = type_brique.color; value = type_brique.value; bonus = if est_bonus && lifetime != 0 then Some OneMoreLife else None};
+        properties = { color = type_brique.color; value = type_brique.value; bonus = if est_bonus && lifetime != 0 then
+                                                                                      match bonus with
+                                                                                      | 1 -> Some OneMoreLife
+                                                                                      | 2 -> Some SpeedUp
+                                                                                      | 3 -> Some SpeedDown
+                                                                                      | 4 -> Some SizeUp
+                                                                                      | 5 -> Some SizeDown
+                                                                                      | _ -> None
+                                                                                      else None };
     lifetime = if lifetime = 0 then Infinity else Int (lifetime/3 + 1)
   };;
 
@@ -77,7 +88,8 @@ let etat_local_initial (size_win_x, size_win_y)  : etat_local =
   }
   in let raquette = { 
       position = (size_win_x -.raquette_width) /. 2., 0. ;
-      vitesse_deplacement = (0., 0.)
+      vitesse_deplacement = (0., 0.);
+      width = raquette_width
   }
   in { terrain = terrain ; balle = balle ; raquette = raquette; nb_vies = 3}
 
