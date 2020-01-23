@@ -29,8 +29,10 @@ type balle = { pos: floating_position; direction : direction};;
 
 type raquette = { position: floating_position; vitesse_deplacement: vitesse_deplacement};;
 
+(* Etat du terrain, de la balle, de la raquette et du nombre de vies du joueur *)
 type etat_local = { terrain : terrain ; balle : balle; raquette: raquette; nb_vies : int };;
 
+(* Taille de l'écran et score actuel de la partie *)
 type etat_global = { window_size : float * float; score : int};;
 
 type etat = {etat_global: etat_global; etat_local: etat_local;};;
@@ -52,6 +54,7 @@ let ( |$ ) (x, y) (x', y') = x*.x' +. y *. y';;
 let ( +$ ) (x, y) (x', y') = (x+.x', y+.y');;
 (* différence de deux vecteurs *)
 let ( -$ ) (x, y) (x', y') = (x-.x', y-.y');;
+(* multiplication d'un vecteur par un scalaire *)
 let ( *: ) a (x,y) = (a*.x, a*.y);;
 let distance_carre p1 p2 = let x = p2 -$ p1 in (x |$ x);;
 

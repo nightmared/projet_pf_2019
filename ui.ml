@@ -75,6 +75,7 @@ let collisions (terrain : terrain)  balle: (brique * collision option) list=
      (brique, collision_cercle_aabb cercle aabb)
   ) terrain;;
 
+(* Initialisation de l'état local et de l'état global *)
 let etat_initial window_size =
   {
     etat_local = etat_local_initial window_size;
@@ -133,7 +134,8 @@ let accelerer_balle (balle : balle) =
   {	balle with 
     direction = dx *. (1.+.(1./.ffrequence)),  dy *. (1.+.(1./.ffrequence)) };;
 
-
+(* Retourne la balle dans son état suivant 
+  Autrement dit, fait avancer la balle et gère les rebonds avec les bords de l'écran *)
 let avancer_balle (etat: etat) (balle: balle) : balle =
   let (x, y) = balle.pos in
   let (dx, dy) = balle.direction in
@@ -151,6 +153,7 @@ let avancer_balle (etat: etat) (balle: balle) : balle =
     (y+.dy, dy))
   in  { pos = (x, y); direction = (dx, dy)};;
 
+(* Affiche textuellement l'état de la balle *)
 let print_balle {pos=(x,y);direction=(dx,dy)} =
   print_string "Point (";print_float x; print_string " , "; print_float y; print_endline ")";
   print_string "Vitesse (";print_float dx;  print_string " , "; print_float dy; print_endline ")";
@@ -178,20 +181,19 @@ let rebond_collisions (collisions: collision list) (balle: balle) : balle =
     let new_direction = -. 2. *. (balle.direction |$ normale) *: normale +$ balle.direction in
     { pos = pt_contact +$ balle_radius*:normale; direction = new_direction};;
 
+(* Retourne le score incrémenté en fonction des briques mortes dans la liste de briques passée en paramètre *)
 let score briques score_ini =
   let briques_mortes = List.filter est_brique_morte briques in
   let valeurs = List.map (fun brique -> brique.properties.value) briques_mortes in
   List.fold_left (+) score_ini valeurs;;
 
-
-
+(* Retourne le nombre de vies du joueurs incrémenter de 1 si une brique contenant un bonus +1 vie est morte dans la liste de briques passée en paramère *)
 let nb_vies nb_vies briques  = 
   let a_bonus_one_more_life = fun (b : brique) -> (b.properties.bonus = Some OneMoreLife) in
   let briques_mortes = List.filter (fun brique -> 
     est_brique_morte brique && a_bonus_one_more_life brique
   ) briques in
   nb_vies + List.length briques_mortes;; 
-
 
 (* Fait avancer la balle, détecte les collisions et supprime les blocs détruits *)
 let detecter_collisions () =
@@ -229,7 +231,7 @@ let detecter_collisions () =
     }
   } in GreenThreadsState.send state'
 
-
+(* Décrémente le nombre de vies du joueur et met fin à la partie si le joueur n'a plus de vies ou que toutes les briques on été détruites *)
 let detecter_fin_du_jeu () =
   let etat = GreenThreadsState.get ()
   in let etat_local = etat.etat_local
@@ -254,6 +256,10 @@ let detecter_fin_du_jeu () =
         }
       }
       in GreenThreadsState.send new_etat)
+  else if List.fold_right (fun brique bool -> bool && (brique.lifetime <= Int(0) || brique.lifetime = Infinity)) etat_local.terrain true then
+    (* Solution temporaire *)
+    GreenThreadsState.stop_scheduler ()
+    (* TODO : niveau suivant ou Congratulations *)
   else ()
 
 (* Dessine les différents objets à l'écran *)
