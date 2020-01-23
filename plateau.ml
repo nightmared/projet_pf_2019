@@ -44,7 +44,7 @@ let gen_brique x_idx y_idx _ height : brique =
   let type_brique = List.nth type_briques lifetime in {
     position = (((x_idx +. 1.) *. brique_border +. (x_idx) *. brique_width),
     height-.((y_idx +. 1.) *. brique_border +. (y_idx-.1.) *. brique_height));
-        properties = { color = type_brique.color; value = type_brique.value; bonus = if est_bonus && lifetime != 0 then Some OneMoreLife else None};
+    properties = { color = type_brique.color; value = type_brique.value; bonus = if est_bonus && lifetime != 0 then Some OneMoreLife else None};
     lifetime = if lifetime = 0 then Infinity else Int (lifetime/3 + 1)
   };;
 

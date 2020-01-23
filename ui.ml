@@ -278,6 +278,7 @@ let dessiner () =
 
 (* 'main' du programme, crée un état initial et lance l'ordonnanceur *)
 let run () =
+  let _ = Random.self_init () in
   let win = open_graph " 640x480" in
   let window_size = float_of_int (size_x win), float_of_int (size_y win) in
   begin
