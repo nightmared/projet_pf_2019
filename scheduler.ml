@@ -19,6 +19,7 @@ module GreenThreads (M: sig type shift end) = struct
   (* Exécute une nouvelle méthode qui remplace la fonction qui vient de "yield" *)
   let continue k = Delimcc.shift p (fun _ -> Yield (k))
 
+  (* génère une tâche qui attend 1/freq avant de s'exécuter *)
   let gen_waiter proc freq = match freq with
    | None -> proc
    | Some f -> (fun () ->
@@ -29,6 +30,7 @@ module GreenThreads (M: sig type shift end) = struct
        proc ()
      end)
 
+  (* génère une tâche qui exécute la même fonction en boucle *)
    let rec gen_looper proc = fun () ->
      (let _ = proc () in continue (gen_looper proc))
 
