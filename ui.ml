@@ -6,6 +6,14 @@ open Float
 
 let raquette_fraction = 10.
 
+(* facteurs affectant la sévérité de l'accélération/décélération de la balle à cause des bonus *)
+let fact_accel = 1.5
+let fact_decel = 0.66
+
+(* facteurs affectant la sévérité de l'agrandissement/rétrécissement de la raquette à cause des bonus *)
+let fact_sizeup = 1.5
+let fact_sizedown = 0.75
+
 exception Collision_ingerable of cercle * aabb
 
 
@@ -207,8 +215,8 @@ let bonus_vitesse briques balle =
   let briques_decel = List.filter (fun brique ->
     est_brique_morte brique && bonus_decel brique
   ) briques in
-  let accel = if (List.length briques_accel) = 0 then 1. else 1.5**(float_of_int (List.length briques_accel)) in
-  let decel = if (List.length briques_decel) = 0 then 1. else 0.66**(float_of_int (List.length briques_decel)) in
+  let accel = if (List.length briques_accel) = 0 then 1. else fact_accel**(float_of_int (List.length briques_accel)) in
+  let decel = if (List.length briques_decel) = 0 then 1. else fact_decel**(float_of_int (List.length briques_decel)) in
   let new_direction = (accel*.decel) *: balle.direction in
   {pos = balle.pos; direction = new_direction}
 
@@ -222,8 +230,8 @@ let bonus_raquette (raquette:raquette) briques =
   let briques_sizedown = List.filter (fun brique ->
     est_brique_morte brique && bonus_sizedown brique
     ) briques in
-  let sizeup = if (List.length briques_sizeup) = 0 then 1. else 1.5**(float_of_int (List.length briques_sizeup)) in
-  let sizedown = if (List.length briques_sizedown) = 0 then 1. else 0.75**(float_of_int (List.length briques_sizedown)) in
+  let sizeup = if (List.length briques_sizeup) = 0 then 1. else fact_sizeup**(float_of_int (List.length briques_sizeup)) in
+  let sizedown = if (List.length briques_sizedown) = 0 then 1. else fact_sizedown**(float_of_int (List.length briques_sizedown)) in
   let new_width = raquette.width *. sizeup *. sizedown in
   {position = raquette.position; vitesse_deplacement = raquette.vitesse_deplacement; width = new_width}
   
@@ -260,7 +268,6 @@ let detecter_collisions () =
     
   let state' = {  
     etat_local =  {
-      etat.etat_local with 
       terrain = terrain'; 
       balle = balle''';
       raquette = raquette';
