@@ -252,35 +252,41 @@ let detecter_collisions () =
   (* fait avancer la balle *)
   let balle' = balle |> avancer_balle etat in 
   (* récupère le statut collision de chaque brique *)
-  let briques_collisions = collisions terrain balle' in
-  let collisions = List.filter_map (fun (_, collision) -> collision) briques_collisions in
-  (* fait rebondir la balle sur la raquette et les briques *)
-  let balle'' = balle'|> rebond_raquette raquette
-                      |> rebond_collisions collisions in
+  (try
+    let briques_collisions = collisions terrain balle' in
+    let collisions = List.filter_map (fun (_, collision) -> collision) briques_collisions in
+    (* fait rebondir la balle sur la raquette et les briques *)
+    let balle'' = balle'|> rebond_raquette raquette
+                        |> rebond_collisions collisions in
 
-  let briques' = abaisser_duree_de_vie_briques briques_collisions in 
-  (* calcul du nouveau score *)
-  let score' = score briques' etat.etat_global.score in 
-  (* ajout d'une vie au joueur si un bonus +1 vie était dans une brique détruite *)
-  let nb_vies' = nb_vies etat_local.nb_vies briques' in
-  (* accelération/ déceleration de la balle en fonction des bonus *)
-  let balle''' = balle'' |> bonus_vitesse briques' in
-  (* Suppression des briques dont la durée de vie est nulle *)
-  let terrain' = List.filter (fun b -> not (est_brique_morte b)) briques' in
-  (* Modification de la taille de la raquette en fonction des bonus *)
-  let raquette' = bonus_raquette etat_local.raquette briques' in
-    
-  let state' = {  
-    etat_local =  {
-      terrain = terrain'; 
-      balle = balle''';
-      raquette = raquette';
-      nb_vies = nb_vies'
-    };
-    etat_global = { 
-      etat.etat_global with score = score'
-    }
-  } in GreenThreadsState.send state'
+    let briques' = abaisser_duree_de_vie_briques briques_collisions in 
+    (* calcul du nouveau score *)
+    let score' = score briques' etat.etat_global.score in 
+    (* ajout d'une vie au joueur si un bonus +1 vie était dans une brique détruite *)
+    let nb_vies' = nb_vies etat_local.nb_vies briques' in
+    (* accelération/ déceleration de la balle en fonction des bonus *)
+    let balle''' = balle'' |> bonus_vitesse briques' in
+    (* Suppression des briques dont la durée de vie est nulle *)
+    let terrain' = List.filter (fun b -> not (est_brique_morte b)) briques' in
+    (* Modification de la taille de la raquette en fonction des bonus *)
+    let raquette' = bonus_raquette etat_local.raquette briques' in
+
+    let state' = {  
+      etat_local =  {
+        terrain = terrain'; 
+        balle = balle''';
+        raquette = raquette';
+        nb_vies = nb_vies'
+      };
+      etat_global = { 
+        etat.etat_global with score = score'
+      }
+    } in GreenThreadsState.send state'
+  with Collision_ingerable (_, _) ->
+    (* provoque artificiellement la fin du jeu *)
+     let state' = { etat with etat_local = { etat.etat_local with balle = { balle with pos = (-1., -1.) } } }
+    in GreenThreadsState.send state')
+
 
 (* Décrémente le nombre de vies du joueur et met fin à la partie si le joueur n'a plus de vies ou que toutes les briques on été détruites *)
 let detecter_fin_du_jeu () =
